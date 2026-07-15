@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Media — store in Supabase Storage instead
+public/*.mp4
+public/*.mov
+public/*.m4v
+public/*.m4a
+public/*.png
+public/*.jpg
+public/*.jpeg
