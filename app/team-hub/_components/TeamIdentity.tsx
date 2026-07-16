@@ -7,65 +7,20 @@ import {
   useMemo,
   useState,
 } from "react";
+import {
+  getTeamIdentityForUsername,
+  TEAM_IDENTITIES,
+  TEAM_SESSION_COOKIE,
+  type TeamAccessLevel,
+  type TeamIdentity,
+} from "@/lib/team-auth";
 
-export type TeamAccessLevel = "owner" | "staff";
-export type TeamIdentity =
-  | "karen"
-  | "adrian"
-  | "arion"
-  | "sure"
-  | "emilia";
-
-export const TEAM_IDENTITIES: Record<
-  TeamIdentity,
-  {
-    username: string;
-    name: string;
-    title: string;
-    accessLevel: TeamAccessLevel;
-    initials: string;
-  }
-> = {
-  karen: {
-    username: "Understory_Karen",
-    name: "Karen",
-    title: "Owner",
-    accessLevel: "owner",
-    initials: "K",
-  },
-  adrian: {
-    username: "Understory_Adrian",
-    name: "Adrian",
-    title: "Co-owner",
-    accessLevel: "owner",
-    initials: "A",
-  },
-  arion: {
-    username: "Understory_Arion",
-    name: "Arion",
-    title: "Creative Director",
-    accessLevel: "staff",
-    initials: "A",
-  },
-  sure: {
-    username: "Understory_Sure",
-    name: "Sure",
-    title: "Media Buyer",
-    accessLevel: "staff",
-    initials: "S",
-  },
-  emilia: {
-    username: "Understory_Emilia",
-    name: "Emilia",
-    title: "Graphic Designer",
-    accessLevel: "staff",
-    initials: "E",
-  },
-};
-
-export const VALID_TEAM_USERNAMES = Object.values(TEAM_IDENTITIES).map(
-  (profile) => profile.username,
-);
+export {
+  TEAM_IDENTITIES,
+  VALID_TEAM_USERNAMES,
+  type TeamAccessLevel,
+  type TeamIdentity,
+} from "@/lib/team-auth";
 
 export const TEAM_IDENTITY_SESSION_KEY = "understory-team-hub-identity";
 export const TEAM_NAME_SESSION_KEY = "understory-team-hub-name";
@@ -92,24 +47,76 @@ function clearSession() {
   window.sessionStorage.removeItem(TEAM_NAME_SESSION_KEY);
   window.sessionStorage.removeItem(TEAM_TITLE_SESSION_KEY);
   window.sessionStorage.removeItem(TEAM_ACCESS_SESSION_KEY);
+  document.cookie = `${TEAM_SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+function readCookie(name: string) {
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+
+  if (!cookie) return null;
+
+  try {
+    return decodeURIComponent(cookie.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+export function saveTeamSession(identity: TeamIdentity) {
+  const profile = TEAM_IDENTITIES[identity];
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+
+  window.sessionStorage.setItem(TEAM_IDENTITY_SESSION_KEY, identity);
+  window.sessionStorage.setItem(TEAM_NAME_SESSION_KEY, profile.name);
+  window.sessionStorage.setItem(TEAM_TITLE_SESSION_KEY, profile.title);
+  window.sessionStorage.setItem(
+    TEAM_ACCESS_SESSION_KEY,
+    profile.accessLevel,
+  );
+  document.cookie = `${TEAM_SESSION_COOKIE}=${encodeURIComponent(
+    profile.username,
+  )}; Path=/; SameSite=Lax${secure}`;
 }
 
 export function readTeamSessionProfile() {
   if (typeof window === "undefined") return null;
-  const identity = window.sessionStorage.getItem(
+  const savedIdentity = window.sessionStorage.getItem(
     TEAM_IDENTITY_SESSION_KEY,
   ) as TeamIdentity | null;
-  const profile = identity ? TEAM_IDENTITIES[identity] : null;
+  const savedProfile = savedIdentity ? TEAM_IDENTITIES[savedIdentity] : null;
+  const hasValidSavedProfile = Boolean(
+    savedProfile &&
+      savedProfile.name ===
+        window.sessionStorage.getItem(TEAM_NAME_SESSION_KEY) &&
+      savedProfile.title ===
+        window.sessionStorage.getItem(TEAM_TITLE_SESSION_KEY) &&
+      savedProfile.accessLevel ===
+        window.sessionStorage.getItem(TEAM_ACCESS_SESSION_KEY),
+  );
+  const cookieIdentity = getTeamIdentityForUsername(
+    readCookie(TEAM_SESSION_COOKIE),
+  );
+
   if (
-    !profile ||
-    profile.name !== window.sessionStorage.getItem(TEAM_NAME_SESSION_KEY) ||
-    profile.title !== window.sessionStorage.getItem(TEAM_TITLE_SESSION_KEY) ||
-    profile.accessLevel !==
-      window.sessionStorage.getItem(TEAM_ACCESS_SESSION_KEY)
+    hasValidSavedProfile &&
+    savedIdentity &&
+    savedProfile &&
+    cookieIdentity === savedIdentity
   ) {
-    return null;
+    return { identity: savedIdentity, ...savedProfile };
   }
-  return { identity, ...profile };
+
+  if (cookieIdentity) {
+    saveTeamSession(cookieIdentity);
+    return { identity: cookieIdentity, ...TEAM_IDENTITIES[cookieIdentity] };
+  }
+
+  clearSession();
+  return null;
 }
 
 export function TeamIdentityProvider({
@@ -123,23 +130,12 @@ export function TeamIdentityProvider({
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const savedIdentity = window.sessionStorage.getItem(
-        TEAM_IDENTITY_SESSION_KEY,
-      ) as TeamIdentity | null;
-      const profile = savedIdentity ? TEAM_IDENTITIES[savedIdentity] : null;
-      const isValid =
-        profile &&
-        profile.name === window.sessionStorage.getItem(TEAM_NAME_SESSION_KEY) &&
-        profile.title ===
-          window.sessionStorage.getItem(TEAM_TITLE_SESSION_KEY) &&
-        profile.accessLevel ===
-          window.sessionStorage.getItem(TEAM_ACCESS_SESSION_KEY);
+      const savedProfile = readTeamSessionProfile();
 
-      if (isValid && savedIdentity) {
-        setIdentity(savedIdentity);
+      if (savedProfile) {
+        setIdentity(savedProfile.identity);
       } else {
         clearSession();
-        setIsPickerOpen(true);
       }
       setIsReady(true);
     });
@@ -159,14 +155,7 @@ export function TeamIdentityProvider({
       isReady,
       isPickerOpen,
       selectIdentity: (nextIdentity) => {
-        const nextProfile = TEAM_IDENTITIES[nextIdentity];
-        window.sessionStorage.setItem(TEAM_IDENTITY_SESSION_KEY, nextIdentity);
-        window.sessionStorage.setItem(TEAM_NAME_SESSION_KEY, nextProfile.name);
-        window.sessionStorage.setItem(TEAM_TITLE_SESSION_KEY, nextProfile.title);
-        window.sessionStorage.setItem(
-          TEAM_ACCESS_SESSION_KEY,
-          nextProfile.accessLevel,
-        );
+        saveTeamSession(nextIdentity);
         setIdentity(nextIdentity);
         setIsPickerOpen(false);
       },
