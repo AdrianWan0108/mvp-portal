@@ -2,8 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   readTeamSessionProfile,
@@ -19,6 +25,16 @@ import {
   isWorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { sendSlackNotification } from "@/lib/slack-notifications";
+import {
+  EMPTY_REEL_DETAILS,
+  PROJECT_ASSIGNEES,
+  SOCIAL_POST_FORMATS,
+  SOCIAL_POST_FORMAT_LABELS,
+  isSocialPostFormat,
+  normalizeReelDetails,
+  type ReelDetails,
+  type SocialPostFormat,
+} from "@/lib/social-content";
 import { UnderstoryBrand } from "../../../_components/UnderstoryBrand";
 
 type PostStatus =
@@ -43,7 +59,10 @@ type Post = {
   title: string;
   brief: string;
   status: PostStatus;
+  format: SocialPostFormat;
   postCaption: string;
+  visualNote: string;
+  reelDetails: ReelDetails;
   assignedTo: string | null;
   slides: Slide[];
 };
@@ -63,7 +82,10 @@ type TaskRow = {
   title: string;
   brief: string;
   status: string;
+  format: string;
   post_caption: string;
+  visual_note: string | null;
+  reel_details: unknown;
   assigned_to: string | null;
   created_at: string;
   task_slides: TaskSlideRow[] | null;
@@ -82,7 +104,10 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
     title: task.title,
     brief: task.brief,
     status: isPostStatus(task.status) ? task.status : "not_started",
+    format: isSocialPostFormat(task.format) ? task.format : "carousel",
     postCaption: task.post_caption,
+    visualNote: task.visual_note ?? "",
+    reelDetails: normalizeReelDetails(task.reel_details),
     assignedTo: task.assigned_to,
     slides: (task.task_slides ?? [])
       .sort((a, b) => a.slide_number - b.slide_number)
@@ -97,8 +122,6 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
       })),
   }));
 }
-
-const taskAssignees = ["Arion", "Sure", "Emilia"] as const;
 
 const statusDetails: Record<
   PostStatus,
@@ -414,10 +437,13 @@ function PostCard({
           </div>
         )}
         <span className="absolute left-4 top-4 rounded-full border border-white/60 bg-white/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#4F3D69] backdrop-blur">
-          Post {String(post.id).padStart(2, "0")}
+          {SOCIAL_POST_FORMAT_LABELS[post.format]} · Post{" "}
+          {String(post.id).padStart(2, "0")}
         </span>
         <span className="absolute bottom-4 right-4 rounded-full bg-[#7D4698]/90 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
-          {post.slides.length} slides
+          {post.format === "carousel"
+            ? `${post.slides.length} slides`
+            : SOCIAL_POST_FORMAT_LABELS[post.format]}
         </span>
       </div>
 
@@ -464,7 +490,7 @@ function PostCard({
                 className="min-w-0 flex-1 rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698]"
               >
                 <option value="">Unassigned</option>
-                {taskAssignees.map((assignee) => (
+                {PROJECT_ASSIGNEES.map((assignee) => (
                   <option key={assignee} value={assignee}>
                     {assignee}
                   </option>
@@ -687,7 +713,8 @@ function PostDetail({
           <div className="max-w-3xl">
             <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B7895]">
               <Icon name="instagram" className="size-4" />
-              Instagram carousel · Post {String(post.id).padStart(2, "0")}
+              Instagram {SOCIAL_POST_FORMAT_LABELS[post.format].toLowerCase()} ·
+              Post {String(post.id).padStart(2, "0")}
             </div>
             <h1
               id="post-detail-title"
@@ -707,62 +734,110 @@ function PostDetail({
           </div>
         </div>
 
-        <section className="py-8 sm:py-10" aria-labelledby="slides-heading">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B7895]">
-                Design direction
-              </p>
-              <h2 id="slides-heading" className="mt-1 text-xl font-semibold text-[#341F60]">
-                Slides
-              </h2>
+        {post.format !== "reel" && post.slides.length > 0 && (
+          <section className="py-8 sm:py-10" aria-labelledby="slides-heading">
+            <div className="mb-5 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B7895]">
+                  Design direction
+                </p>
+                <h2
+                  id="slides-heading"
+                  className="mt-1 text-xl font-semibold text-[#341F60]"
+                >
+                  {post.format === "carousel" ? "Slides" : "Visual"}
+                </h2>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  aria-live="polite"
+                  className="min-w-10 text-center text-sm font-semibold text-[#4F3D69]"
+                >
+                  {activeSlide + 1} / {post.slides.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => scrollToSlide(activeSlide - 1)}
+                  disabled={activeSlide === 0}
+                  className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <Icon name="arrow" className="size-4" />
+                  <span className="sr-only">Previous slide</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollToSlide(activeSlide + 1)}
+                  disabled={activeSlide === post.slides.length - 1}
+                  className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <Icon name="chevron" className="size-4" />
+                  <span className="sr-only">Next slide</span>
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span aria-live="polite" className="min-w-10 text-center text-sm font-semibold text-[#4F3D69]">
-                {activeSlide + 1} / {post.slides.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => scrollToSlide(activeSlide - 1)}
-                disabled={activeSlide === 0}
-                className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <Icon name="arrow" className="size-4" />
-                <span className="sr-only">Previous slide</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSlide(activeSlide + 1)}
-                disabled={activeSlide === post.slides.length - 1}
-                className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <Icon name="chevron" className="size-4" />
-                <span className="sr-only">Next slide</span>
-              </button>
-            </div>
-          </div>
 
-          <div
-            ref={carouselRef}
-            onScroll={updateActiveSlide}
-            className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-7 pt-2 [scrollbar-width:none] sm:-mx-8 sm:gap-6 sm:px-8 [&::-webkit-scrollbar]:hidden"
-          >
-            {post.slides.map((slide) => (
-              <SlidePreview
-                key={slide.slideNumber}
-                post={post}
-                slide={slide}
-                previewUrl={slideImageLinks[`${post.id}-${slide.slideNumber}`]}
-                onImageSave={(link) =>
-                  onSlideImageSave(slide.slideNumber, link)
-                }
-                onClearImage={() => onClearSlideImage(slide.slideNumber)}
-                canManage={canManage}
-              />
-            ))}
-          </div>
-          <p className="text-center text-[11px] text-[#8B7895] sm:hidden">
-            Swipe to see the next slide
+            <div
+              ref={carouselRef}
+              onScroll={updateActiveSlide}
+              className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-7 pt-2 [scrollbar-width:none] sm:-mx-8 sm:gap-6 sm:px-8 [&::-webkit-scrollbar]:hidden"
+            >
+              {post.slides.map((slide) => (
+                <SlidePreview
+                  key={slide.slideNumber}
+                  post={post}
+                  slide={slide}
+                  previewUrl={
+                    slideImageLinks[`${post.id}-${slide.slideNumber}`]
+                  }
+                  onImageSave={(link) =>
+                    onSlideImageSave(slide.slideNumber, link)
+                  }
+                  onClearImage={() => onClearSlideImage(slide.slideNumber)}
+                  canManage={canManage}
+                />
+              ))}
+            </div>
+            <p className="text-center text-[11px] text-[#8B7895] sm:hidden">
+              Swipe to see the next slide
+            </p>
+          </section>
+        )}
+
+        {post.format === "reel" && (
+          <section className="grid gap-4 py-8 sm:grid-cols-2 sm:py-10">
+            <article className="rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[var(--primary)]">
+                Hook
+              </p>
+              <p className="mt-3 text-base font-semibold leading-7 text-[var(--foreground)]">
+                {post.reelDetails.hook || "No hook added yet."}
+              </p>
+            </article>
+            <article className="rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[var(--primary)]">
+                CTA
+              </p>
+              <p className="mt-3 text-base font-semibold leading-7 text-[var(--foreground)]">
+                {post.reelDetails.cta || "No CTA added yet."}
+              </p>
+            </article>
+            <article className="rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-5 sm:col-span-2 sm:p-6">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[var(--primary)]">
+                Script
+              </p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--foreground)]">
+                {post.reelDetails.script || "No script added yet."}
+              </p>
+            </article>
+          </section>
+        )}
+
+        <section className="mb-6 rounded-[24px] border border-[var(--border)] bg-[var(--card)] p-5 sm:p-8">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">
+            Visual note
+          </p>
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[var(--foreground)]">
+            {post.visualNote || "No overall visual note has been added yet."}
           </p>
         </section>
 
@@ -784,9 +859,12 @@ function PostDetail({
 
 type PostEditorState = {
   post?: Post;
+  format: SocialPostFormat;
   title: string;
   brief: string;
   postCaption: string;
+  visualNote: string;
+  reelDetails: ReelDetails;
   status: PostStatus;
   assignedTo: string;
 };
@@ -808,10 +886,11 @@ function PostEditorModal({
     <TeamModal
       open={Boolean(editor)}
       title={editor?.post ? "Edit social media task" : "Add social media task"}
-      description="Manage the carousel brief and assignment. Slide content remains in the task detail."
+      description="Choose the post format, then capture the shared production details."
       submitLabel={editor?.post ? "Save changes" : "Add task"}
       isSaving={isSaving}
       submitDisabled={!editor?.title.trim()}
+      themed
       onClose={onClose}
       onSubmit={(event) => {
         event.preventDefault();
@@ -820,6 +899,42 @@ function PostEditorModal({
     >
       {editor && (
         <div className="space-y-4">
+          <fieldset>
+            <legend className="text-xs font-semibold text-[#341F60]">
+              Format
+            </legend>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {SOCIAL_POST_FORMATS.map((format) => (
+                <label
+                  key={format}
+                  className={`cursor-pointer rounded-xl border px-3 py-2.5 text-center text-xs font-semibold transition ${
+                    editor.format === format
+                      ? "border-[var(--primary)] bg-[var(--muted)] text-[var(--foreground)]"
+                      : "border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)]"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="post-format"
+                    value={format}
+                    checked={editor.format === format}
+                    onChange={() =>
+                      onChange({
+                        ...editor,
+                        format,
+                        reelDetails:
+                          format === "reel"
+                            ? editor.reelDetails
+                            : { ...EMPTY_REEL_DETAILS },
+                      })
+                    }
+                    className="sr-only"
+                  />
+                  {SOCIAL_POST_FORMAT_LABELS[format]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <label className="block text-xs font-semibold text-[#341F60]">
             Title
             <input
@@ -852,6 +967,77 @@ function PostEditorModal({
               className={`mt-2 resize-none ${teamInputClass}`}
             />
           </label>
+          <label className="block text-xs font-semibold text-[#341F60]">
+            Visual note
+            <textarea
+              rows={4}
+              value={editor.visualNote}
+              onChange={(event) =>
+                onChange({ ...editor, visualNote: event.target.value })
+              }
+              className={`mt-2 resize-none ${teamInputClass}`}
+              placeholder="Describe the overall visual direction."
+            />
+          </label>
+          {editor.format === "reel" && (
+            <div className="grid gap-4 rounded-2xl border border-[var(--border)] bg-[var(--muted)]/45 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--primary)]">
+                Reel details
+              </p>
+              <label className="text-xs font-semibold text-[#341F60]">
+                Hook
+                <input
+                  value={editor.reelDetails.hook}
+                  onChange={(event) =>
+                    onChange({
+                      ...editor,
+                      reelDetails: {
+                        ...editor.reelDetails,
+                        hook: event.target.value,
+                      },
+                    })
+                  }
+                  className={`mt-2 ${teamInputClass}`}
+                  placeholder="Opening line or first-frame hook"
+                />
+              </label>
+              <label className="text-xs font-semibold text-[#341F60]">
+                Script
+                <textarea
+                  rows={7}
+                  value={editor.reelDetails.script}
+                  onChange={(event) =>
+                    onChange({
+                      ...editor,
+                      reelDetails: {
+                        ...editor.reelDetails,
+                        script: event.target.value,
+                      },
+                    })
+                  }
+                  className={`mt-2 resize-y ${teamInputClass}`}
+                  placeholder="Write the Reel script."
+                />
+              </label>
+              <label className="text-xs font-semibold text-[#341F60]">
+                CTA
+                <input
+                  value={editor.reelDetails.cta}
+                  onChange={(event) =>
+                    onChange({
+                      ...editor,
+                      reelDetails: {
+                        ...editor.reelDetails,
+                        cta: event.target.value,
+                      },
+                    })
+                  }
+                  className={`mt-2 ${teamInputClass}`}
+                  placeholder="What should the viewer do next?"
+                />
+              </label>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-xs font-semibold text-[#341F60]">
               Status
@@ -882,7 +1068,7 @@ function PostEditorModal({
                 className={`mt-2 ${teamInputClass}`}
               >
                 <option value="">Unassigned</option>
-                {taskAssignees.map((assignee) => (
+                {PROJECT_ASSIGNEES.map((assignee) => (
                   <option key={assignee} value={assignee}>
                     {assignee}
                   </option>
@@ -896,12 +1082,19 @@ function PostEditorModal({
   );
 }
 
-export default function AugustContentCalendarPage() {
+function AugustContentCalendarContent() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const pathCalendarId = pathname.match(
+    /^\/team-hub\/projects\/([0-9a-f-]{36})\/calendar$/i,
+  )?.[1];
+  const requestedCalendarId = searchParams.get("calendar") ?? pathCalendarId;
   const routeClientSlug = pathname.split("/")[2] ?? null;
-  const clientSlug = isWorkspaceClientSlug(routeClientSlug)
+  const fallbackClientSlug = isWorkspaceClientSlug(routeClientSlug)
     ? routeClientSlug
     : "mvp";
+  const [clientSlug, setClientSlug] =
+    useState<keyof typeof WORKSPACE_CLIENTS>(fallbackClientSlug);
   const clientLabel = WORKSPACE_CLIENTS[clientSlug].name;
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -910,6 +1103,13 @@ export default function AugustContentCalendarPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [calendarTaskId, setCalendarTaskId] = useState<string | null>(null);
+  const [calendarTitle, setCalendarTitle] = useState(
+    "August content calendar",
+  );
+  const [calendarDescription, setCalendarDescription] = useState(
+    "Open a post to review the copy, visual direction, and captions for every slide.",
+  );
   const [teamProfile, setTeamProfile] = useState<{
     name: string;
     accessLevel: TeamAccessLevel;
@@ -950,22 +1150,98 @@ export default function AugustContentCalendarPage() {
       setIsLoading(true);
       setPosts([]);
       setSelectedPostId(null);
-      const { data: client, error: clientError } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("slug", clientSlug)
-        .maybeSingle();
+      let calendar: {
+        id: string;
+        title: string;
+        description: string | null;
+        client_id: string;
+      } | null = null;
+      let resolvedClientId: string | null = null;
+      let resolvedClientSlug = fallbackClientSlug;
 
-      if (!isActive) return;
+      if (requestedCalendarId) {
+        const { data, error } = await supabase
+          .from("division_tasks")
+          .select("id, title, description, client_id")
+          .eq("id", requestedCalendarId)
+          .eq("division", "social-media")
+          .eq("template_type", "content_calendar")
+          .maybeSingle();
 
-      if (clientError || !client) {
-        setErrorMessage(
-          `Could not load ${clientLabel}: ${clientError?.message ?? "Client not found."}`,
-        );
-        setIsLoading(false);
-        return;
+        if (!isActive) return;
+        if (error || !data) {
+          setErrorMessage(
+            `Could not load this content calendar: ${
+              error?.message ?? "Calendar not found."
+            }`,
+          );
+          setIsLoading(false);
+          return;
+        }
+        calendar = data;
+        resolvedClientId = data.client_id;
+
+        const { data: clientRecord, error: clientError } = await supabase
+          .from("clients")
+          .select("slug")
+          .eq("id", data.client_id)
+          .maybeSingle();
+
+        const resolvedSlug = clientRecord?.slug ?? null;
+        if (!isActive || clientError || !isWorkspaceClientSlug(resolvedSlug)) {
+          if (isActive) {
+            setErrorMessage(
+              `Could not resolve this calendar's client: ${
+                clientError?.message ?? "Client not found."
+              }`,
+            );
+            setIsLoading(false);
+          }
+          return;
+        }
+        resolvedClientSlug = resolvedSlug;
+      } else {
+        const { data: client, error: clientError } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("slug", fallbackClientSlug)
+          .maybeSingle();
+
+        if (!isActive) return;
+        if (clientError || !client) {
+          setErrorMessage(
+            `Could not load ${WORKSPACE_CLIENTS[fallbackClientSlug].name}: ${
+              clientError?.message ?? "Client not found."
+            }`,
+          );
+          setIsLoading(false);
+          return;
+        }
+        resolvedClientId = client.id;
+
+        const { data } = await supabase
+          .from("division_tasks")
+          .select("id, title, description, client_id")
+          .eq("client_id", client.id)
+          .eq("division", "social-media")
+          .eq("template_type", "content_calendar")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        calendar = data;
       }
-      setClientId(client.id);
+
+      if (!resolvedClientId) return;
+      setClientSlug(resolvedClientSlug);
+      setClientId(resolvedClientId);
+
+      const activeCalendarId = calendar?.id ?? null;
+      setCalendarTaskId(activeCalendarId);
+      setCalendarTitle(calendar?.title ?? "August content calendar");
+      setCalendarDescription(
+        calendar?.description ||
+          "Open a post to review the copy, visual direction, and captions for every slide.",
+      );
 
       let query = supabase
         .from("tasks")
@@ -975,7 +1251,10 @@ export default function AugustContentCalendarPage() {
             title,
             brief,
             status,
+            format,
             post_caption,
+            visual_note,
+            reel_details,
             assigned_to,
             created_at,
             task_slides (
@@ -989,8 +1268,11 @@ export default function AugustContentCalendarPage() {
             )
           `,
         )
-        .eq("client_id", client.id)
+        .eq("client_id", resolvedClientId)
         .order("created_at", { ascending: true });
+      query = activeCalendarId
+        ? query.eq("division_task_id", activeCalendarId)
+        : query.is("division_task_id", null);
       if (activeProfile.accessLevel === "staff") {
         query = query.eq("assigned_to", activeProfile.name);
       }
@@ -1031,7 +1313,12 @@ export default function AugustContentCalendarPage() {
     return () => {
       isActive = false;
     };
-  }, [clientLabel, clientSlug, isTeamProfileReady, teamProfile]);
+  }, [
+    fallbackClientSlug,
+    isTeamProfileReady,
+    requestedCalendarId,
+    teamProfile,
+  ]);
 
   const updatePostRailState = useCallback(() => {
     const rail = postRailRef.current;
@@ -1218,9 +1505,12 @@ export default function AugustContentCalendarPage() {
     if (!canManage) return;
     setEditor({
       post,
+      format: post?.format ?? "carousel",
       title: post?.title ?? "",
       brief: post?.brief ?? "",
       postCaption: post?.postCaption ?? "",
+      visualNote: post?.visualNote ?? "",
+      reelDetails: post?.reelDetails ?? { ...EMPTY_REEL_DETAILS },
       status: post?.status ?? "not_started",
       assignedTo: post?.assignedTo ?? "",
     });
@@ -1233,10 +1523,21 @@ export default function AugustContentCalendarPage() {
       client_id: clientId,
       title: editor.title.trim(),
       brief: editor.brief.trim(),
+      format: editor.format,
       post_caption: editor.postCaption.trim(),
+      visual_note: editor.visualNote.trim() || null,
+      reel_details:
+        editor.format === "reel"
+          ? {
+              hook: editor.reelDetails.hook.trim(),
+              script: editor.reelDetails.script.trim(),
+              cta: editor.reelDetails.cta.trim(),
+            }
+          : null,
       status: editor.status,
       assigned_to: editor.assignedTo || null,
       assignee: editor.assignedTo || "Unassigned",
+      division_task_id: calendarTaskId,
     };
     const mutation = editor.post
       ? supabase
@@ -1309,13 +1610,13 @@ export default function AugustContentCalendarPage() {
         <section className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-              Content production · August 2026
+              Content production · Content calendar
             </p>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl lg:text-[42px]">
-              {clientLabel} — Social media · August content calendar
+              {clientLabel} — Social media · {calendarTitle}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
-              Open a post to review the copy, visual direction, and captions for every slide.
+              {calendarDescription}
             </p>
           </div>
           <div className="flex items-center gap-2 self-start rounded-full border border-[#E0D4E8] bg-white px-4 py-2 text-xs font-medium text-[#695677] shadow-sm sm:self-auto">
@@ -1467,5 +1768,21 @@ export default function AugustContentCalendarPage() {
         onSave={() => void savePost()}
       />
     </div>
+  );
+}
+
+export default function AugustContentCalendarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#FFF9EF] px-5 py-12 text-[#75647F]">
+          <div className="mx-auto max-w-[1200px]">
+            <div className="h-80 animate-pulse rounded-[24px] border border-[#E5DBEC] bg-white" />
+          </div>
+        </div>
+      }
+    >
+      <AugustContentCalendarContent />
+    </Suspense>
   );
 }

@@ -15,6 +15,8 @@ import {
   type WorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { sendSlackNotification } from "@/lib/slack-notifications";
+import { PROJECT_ASSIGNEES } from "@/lib/social-content";
+import { useOptionalProjectTheme } from "@/app/team-hub/projects/_components/ProjectThemeProvider";
 import { UnderstoryBrand } from "../_components/UnderstoryBrand";
 
 type ClientSlug = WorkspaceClientSlug;
@@ -65,8 +67,6 @@ type ClientRow = {
   name: string;
   slug: string;
 };
-
-const taskAssignees = ["Arion", "Sure", "Emilia"] as const;
 
 const columns: Array<{
   id: ColumnStatus;
@@ -322,7 +322,7 @@ function TaskListRow({
               className="rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698] focus:ring-2 focus:ring-[#EEE3FA]"
             >
               <option value="">Unassigned</option>
-              {taskAssignees.map((assignee) => (
+              {PROJECT_ASSIGNEES.map((assignee) => (
                 <option key={assignee} value={assignee}>
                   {assignee}
                 </option>
@@ -486,7 +486,7 @@ function AddTaskModal({
               className="mt-2 w-full rounded-xl border border-[#DED0E7] bg-[#FFFCF7] px-3.5 py-3 text-sm text-[#341F60] outline-none transition focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
             >
               <option value="">Unassigned</option>
-              {taskAssignees.map((assignee) => (
+              {PROJECT_ASSIGNEES.map((assignee) => (
                 <option key={assignee} value={assignee}>
                   {assignee}
                 </option>
@@ -1431,6 +1431,7 @@ function TaskDetailPanel({
 
 function WebsiteDevelopmentDashboard() {
   const searchParams = useSearchParams();
+  const projectTheme = useOptionalProjectTheme();
   const requestedClient = searchParams.get("client");
   const initialClient: ClientSlug =
     isWorkspaceClientSlug(requestedClient) ? requestedClient : "mvp";
@@ -1769,7 +1770,9 @@ function WebsiteDevelopmentDashboard() {
             <ClientSelect
               value={selectedClient}
               onChange={(value) => {
-                setSelectedClient(value as ClientSlug);
+                const nextClient = value as ClientSlug;
+                setSelectedClient(nextClient);
+                projectTheme?.setClient(nextClient);
                 setStatusFilter("all");
               }}
               options={clientOptions}

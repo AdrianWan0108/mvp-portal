@@ -6,7 +6,7 @@ type ClientSelectProps = {
   options: Array<{ value: string; label: string }>;
   ariaLabel?: string;
   disabled?: boolean;
-  tone?: "light" | "dark";
+  tone?: "light" | "dark" | "themed";
   className?: string;
 };
 
@@ -24,6 +24,8 @@ export function ClientSelect({
       "border-[#CDBAD9] bg-white text-[#341F60] shadow-[0_4px_14px_rgba(52,31,96,0.06)] hover:border-[#A984BC] focus:border-[#7D4698] focus:ring-[#EEE3FA]",
     dark:
       "border-white/25 bg-white/10 text-white hover:bg-white/15 focus:border-[#F4CE45] focus:ring-white/15",
+    themed:
+      "border-[var(--input)] bg-[var(--card)] text-[var(--foreground)] shadow-[0_4px_14px_rgba(40,50,55,0.06)] hover:border-[var(--primary)] focus:border-[var(--primary)] focus:ring-[var(--muted)]",
   };
 
   return (
@@ -39,7 +41,11 @@ export function ClientSelect({
           <option
             key={option.value}
             value={option.value}
-            className="bg-white text-[#28154F]"
+            className={
+              tone === "themed"
+                ? "bg-[var(--card)] text-[var(--foreground)]"
+                : "bg-white text-[#28154F]"
+            }
           >
             {option.label}
           </option>
