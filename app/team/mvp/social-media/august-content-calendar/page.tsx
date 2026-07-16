@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { UnderstoryBrand } from "../../../_components/UnderstoryBrand";
 
 type PostStatus =
   | "not_started"
@@ -85,8 +86,8 @@ const statusDetails: Record<
 > = {
   not_started: {
     label: "Not started",
-    className: "border-[#D9DEDA] bg-white text-[#536159]",
-    dot: "bg-[#A8B0AA]",
+    className: "border-[#DED0E7] bg-white text-[#695677]",
+    dot: "bg-[#A693AF]",
   },
   for_review: {
     label: "For review",
@@ -119,17 +120,17 @@ function StatusBadge({ status }: { status: PostStatus }) {
 }
 
 const slidePalettes = [
-  ["#213F32", "#AFC4B7"],
-  ["#765B49", "#D6BCA9"],
-  ["#49666B", "#A9C3C5"],
-  ["#605267", "#C7B7CA"],
+  ["#341F60", "#D8C2E9"],
+  ["#7D4698", "#E2D1F0"],
+  ["#5F3378", "#D9C5E9"],
+  ["#49306C", "#E7DAF2"],
 ] as const;
 
 const fallbackImages = [
-  "https://placehold.co/400x500/E4E9E3/294B3B?text=Rebrand%0Areference",
-  "https://placehold.co/400x500/E9E0D9/4C4038?text=Myth-busting%0Areference",
-  "https://placehold.co/400x500/DDE8E8/314F53?text=Polestar%0Areference",
-  "https://placehold.co/400x500/E7E0E8/4B3F50?text=Founder+story%0Areference",
+  "https://placehold.co/400x500/EEE3FA/341F60?text=Rebrand%0Areference",
+  "https://placehold.co/400x500/F2E8FA/341F60?text=Myth-busting%0Areference",
+  "https://placehold.co/400x500/E7D7F2/341F60?text=Polestar%0Areference",
+  "https://placehold.co/400x500/F4EAFB/341F60?text=Founder+story%0Areference",
 ] as const;
 
 function getPostPlaceholderImage(post: Post) {
@@ -239,7 +240,7 @@ function PreviewImage({
 
   if (hasFailed) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-[#EEF2EE] px-6 text-center text-xs leading-5 text-[#5F6F66]">
+      <div className="absolute inset-0 flex items-center justify-center bg-[#F0E8F6] px-6 text-center text-xs leading-5 text-[#695677]">
         <div className="max-w-[260px]">
           <Icon name="warning" className="mx-auto mb-2 size-5 text-[#A57731]" />
           Image couldn&apos;t load — make sure the Google Drive file is shared as
@@ -293,7 +294,7 @@ function DriveLinkInput({
           <span className="relative block">
             <Icon
               name="link"
-              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#839087]"
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#8B7895]"
             />
             <input
               type="url"
@@ -303,14 +304,14 @@ function DriveLinkInput({
                 setValidationError(null);
               }}
               placeholder="Paste Google Drive link"
-              className="h-9 w-full rounded-full border border-[#CBD6CE] bg-white pl-8 pr-3 text-[11px] text-[#405349] outline-none transition placeholder:text-[#9BA59F] focus:border-[#7E9E8A] focus:ring-2 focus:ring-[#6E967F]/20"
+              className="h-9 w-full rounded-full border border-[#DED0E7] bg-white pl-8 pr-3 text-[11px] text-[#4F3D69] outline-none transition placeholder:text-[#A18DAA] focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
             />
           </span>
         </label>
         <button
           type="submit"
           aria-label={`Save ${label}`}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#294B3B] text-white shadow-sm transition hover:bg-[#365D49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E967F]"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#7D4698] text-white shadow-sm transition hover:bg-[#6A3A82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
         >
           <Icon name="check" className="size-4" />
         </button>
@@ -318,7 +319,7 @@ function DriveLinkInput({
           <button
             type="button"
             onClick={onClear}
-            className="shrink-0 rounded-full border border-[#D8DEDA] bg-white px-3 py-2 text-[11px] font-semibold text-[#68766E] transition hover:border-[#BFC9C2] hover:bg-[#F5F7F5] hover:text-[#3F5147] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E967F]"
+            className="shrink-0 rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#75647F] transition hover:border-[#C7B3D2] hover:bg-[#F5EEFA] hover:text-[#4F3D69] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
           >
             Clear
           </button>
@@ -327,25 +328,6 @@ function DriveLinkInput({
       {validationError && (
         <p className="mt-1.5 text-[10px] text-[#9A5E42]">{validationError}</p>
       )}
-    </div>
-  );
-}
-
-function Logo() {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="relative flex size-10 items-center justify-center rounded-full border border-[#AFC2B7] text-[10px] font-semibold tracking-[0.18em] text-[#294B3B]">
-        MV
-        <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#C8A77B]" />
-      </span>
-      <span>
-        <span className="block text-sm font-semibold tracking-wide text-[#294B3B]">
-          Motion Vitality
-        </span>
-        <span className="block text-[9px] uppercase tracking-[0.25em] text-[#849087]">
-          Pilates
-        </span>
-      </span>
     </div>
   );
 }
@@ -369,15 +351,15 @@ function PostCard({
 
   return (
     <article
-      className="group relative w-[82vw] max-w-[360px] shrink-0 snap-start cursor-pointer overflow-hidden rounded-[24px] border border-[#DFE4DF] bg-white shadow-[0_8px_30px_rgba(38,61,49,0.06)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_16px_42px_rgba(38,61,49,0.11)] sm:w-[360px]"
+      className="group relative w-[82vw] max-w-[360px] shrink-0 snap-start cursor-pointer overflow-hidden rounded-[24px] border border-[#E3D8EA] bg-white shadow-[0_8px_30px_rgba(52,31,96,0.06)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_16px_42px_rgba(52,31,96,0.11)] sm:w-[360px]"
     >
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${post.title}`}
-        className="absolute inset-0 z-10 rounded-[24px] focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[#6E967F]"
+        className="absolute inset-0 z-10 rounded-[24px] focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[#7D4698]"
       />
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#E6EBE6]">
+      <div className="relative aspect-[4/5] overflow-hidden bg-[#EEE3FA]">
         {cardCoverImage ? (
           <>
             <PreviewImage
@@ -385,7 +367,7 @@ function PostCard({
               alt={`Cover image for ${post.title}`}
               className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1F3328]/30 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#341F60]/30 via-transparent to-transparent" />
           </>
         ) : (
           <div
@@ -393,41 +375,41 @@ function PostCard({
             aria-label={`Pending visuals upload for ${post.title}`}
             className="absolute inset-0 flex items-center justify-center px-8 text-center"
             style={{
-              backgroundImage: `linear-gradient(145deg, ${coverSecondary} 0%, #F4F6F2 55%, ${coverPrimary} 160%)`,
+              backgroundImage: `linear-gradient(145deg, ${coverSecondary} 0%, #FFF9EF 55%, ${coverPrimary} 160%)`,
             }}
           >
-            <span className="rounded-full border border-white/55 bg-white/55 px-4 py-2 text-xs font-medium tracking-[0.01em] text-[#5E6D65] backdrop-blur-sm">
+            <span className="rounded-full border border-white/55 bg-white/55 px-4 py-2 text-xs font-medium tracking-[0.01em] text-[#695677] backdrop-blur-sm">
               Pending visuals upload
             </span>
           </div>
         )}
-        <span className="absolute left-4 top-4 rounded-full border border-white/60 bg-white/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#42554A] backdrop-blur">
+        <span className="absolute left-4 top-4 rounded-full border border-white/60 bg-white/85 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#4F3D69] backdrop-blur">
           Post {String(post.id).padStart(2, "0")}
         </span>
-        <span className="absolute bottom-4 right-4 rounded-full bg-[#294B3B]/90 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
+        <span className="absolute bottom-4 right-4 rounded-full bg-[#7D4698]/90 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur">
           {post.slides.length} slides
         </span>
       </div>
 
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#263E32] sm:text-xl">
+          <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#341F60] sm:text-xl">
             {post.title}
           </h2>
-          <span className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E0E5E1] text-[#718078] transition group-hover:border-[#B8C8BE] group-hover:bg-[#EFF4F0] group-hover:text-[#294B3B]">
+          <span className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-[#E3D8EA] text-[#75647F] transition group-hover:border-[#C7B3D2] group-hover:bg-[#EEE3FA] group-hover:text-[#7D4698]">
             <Icon name="chevron" className="size-4" />
           </span>
         </div>
-        <p className="mt-3 min-h-[72px] text-sm leading-6 text-[#68766E]">
+        <p className="mt-3 min-h-[72px] text-sm leading-6 text-[#75647F]">
           {post.brief}
         </p>
-        <div className="relative z-20 mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#EBEEEB] pt-5">
+        <div className="relative z-20 mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#F0E9F5] pt-5">
           <StatusBadge status={status} />
           {status === "not_started" && (
             <button
               type="button"
               onClick={onSubmitForReview}
-              className="rounded-full bg-[#294B3B] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#365D49] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E967F]"
+              className="rounded-full bg-[#7D4698] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#6A3A82] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
             >
               Submit for review
             </button>
@@ -467,7 +449,7 @@ function SlidePreview({
   return (
     <article className="w-[84vw] max-w-[390px] shrink-0 snap-center sm:w-[390px]">
       <div
-        className="relative aspect-[4/5] overflow-hidden rounded-[22px] shadow-[0_18px_45px_rgba(27,49,38,0.16)]"
+        className="relative aspect-[4/5] overflow-hidden rounded-[22px] shadow-[0_18px_45px_rgba(52,31,96,0.16)]"
         style={{ backgroundColor: primary }}
       >
         {previewImageUrl ? (
@@ -518,8 +500,8 @@ function SlidePreview({
         </span>
       </div>
 
-      <div className="mt-5 rounded-[20px] border border-[#E0E5E1] bg-white p-5">
-        <div className="mb-4 border-b border-[#E8ECE9] pb-4">
+      <div className="mt-5 rounded-[20px] border border-[#E3D8EA] bg-white p-5">
+        <div className="mb-4 border-b border-[#EEE6F4] pb-4">
           <DriveLinkInput
             key={previewUrl || "empty"}
             value={previewUrl}
@@ -535,17 +517,17 @@ function SlidePreview({
           </div>
         )}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#939D97]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
             Visual direction
           </p>
-          <p className="mt-2 text-sm leading-6 text-[#526159]">{slide.visualNote}</p>
+          <p className="mt-2 text-sm leading-6 text-[#695677]">{slide.visualNote}</p>
         </div>
         {slide.slideCaption && (
-          <div className="mt-4 border-t border-[#E8ECE9] pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#718D7C]">
+          <div className="mt-4 border-t border-[#EEE6F4] pt-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#7D4698]">
               Per-slide caption
             </p>
-            <p className="mt-2 text-sm font-medium leading-6 text-[#314B3E]">
+            <p className="mt-2 text-sm font-medium leading-6 text-[#341F60]">
               {slide.slideCaption}
             </p>
           </div>
@@ -619,15 +601,15 @@ function PostDetail({
       role="dialog"
       aria-modal="true"
       aria-labelledby="post-detail-title"
-      className="fixed inset-0 z-50 overflow-y-auto bg-[#F4F6F2]"
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#FFF9EF]"
     >
-      <header className="sticky top-0 z-20 border-b border-[#DFE5DF] bg-white/95 px-4 py-3 backdrop-blur sm:px-8">
+      <header className="sticky top-0 z-20 border-b border-[#E3D8EA] bg-white/95 px-4 py-3 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4">
-          <Logo />
+          <UnderstoryBrand />
           <button
             type="button"
             onClick={onClose}
-            className="flex size-10 items-center justify-center rounded-full border border-[#DCE2DD] bg-white text-[#4B5D53] transition hover:bg-[#EFF3EF] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#668A75]"
+            className="flex size-10 items-center justify-center rounded-full border border-[#E0D4E8] bg-white text-[#5F4D70] transition hover:bg-[#EEE3FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
           >
             <Icon name="close" className="size-5" />
             <span className="sr-only">Close post details</span>
@@ -636,24 +618,24 @@ function PostDetail({
       </header>
 
       <main className="mx-auto max-w-[1320px] px-4 py-7 sm:px-8 sm:py-10">
-        <div className="flex flex-col justify-between gap-5 border-b border-[#DDE3DE] pb-8 md:flex-row md:items-end">
+        <div className="flex flex-col justify-between gap-5 border-b border-[#E0D4E8] pb-8 md:flex-row md:items-end">
           <div className="max-w-3xl">
-            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#829087]">
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B7895]">
               <Icon name="instagram" className="size-4" />
               Instagram carousel · Post {String(post.id).padStart(2, "0")}
             </div>
             <h1
               id="post-detail-title"
-              className="text-3xl font-semibold tracking-[-0.04em] text-[#263E32] sm:text-4xl"
+              className="text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl"
             >
               {post.title}
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#68766E] sm:text-base sm:leading-7">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base sm:leading-7">
               {post.brief}
             </p>
           </div>
           <div className="shrink-0">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#939D97]">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7895]">
               Status
             </p>
             <StatusBadge status={status} />
@@ -663,22 +645,22 @@ function PostDetail({
         <section className="py-8 sm:py-10" aria-labelledby="slides-heading">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B9790]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8B7895]">
                 Design direction
               </p>
-              <h2 id="slides-heading" className="mt-1 text-xl font-semibold text-[#294B3B]">
+              <h2 id="slides-heading" className="mt-1 text-xl font-semibold text-[#341F60]">
                 Slides
               </h2>
             </div>
             <div className="flex items-center gap-3">
-              <span aria-live="polite" className="min-w-10 text-center text-sm font-semibold text-[#475A50]">
+              <span aria-live="polite" className="min-w-10 text-center text-sm font-semibold text-[#4F3D69]">
                 {activeSlide + 1} / {post.slides.length}
               </span>
               <button
                 type="button"
                 onClick={() => scrollToSlide(activeSlide - 1)}
                 disabled={activeSlide === 0}
-                className="flex size-10 items-center justify-center rounded-full border border-[#D6DED8] bg-white text-[#42554A] shadow-sm transition hover:bg-[#EDF3EE] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
               >
                 <Icon name="arrow" className="size-4" />
                 <span className="sr-only">Previous slide</span>
@@ -687,7 +669,7 @@ function PostDetail({
                 type="button"
                 onClick={() => scrollToSlide(activeSlide + 1)}
                 disabled={activeSlide === post.slides.length - 1}
-                className="flex size-10 items-center justify-center rounded-full border border-[#D6DED8] bg-white text-[#42554A] shadow-sm transition hover:bg-[#EDF3EE] disabled:cursor-not-allowed disabled:opacity-35"
+                className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-sm transition hover:bg-[#EEE3FA] disabled:cursor-not-allowed disabled:opacity-35"
               >
                 <Icon name="chevron" className="size-4" />
                 <span className="sr-only">Next slide</span>
@@ -713,19 +695,19 @@ function PostDetail({
               />
             ))}
           </div>
-          <p className="text-center text-[11px] text-[#8B9690] sm:hidden">
+          <p className="text-center text-[11px] text-[#8B7895] sm:hidden">
             Swipe to see the next slide
           </p>
         </section>
 
-        <section className="rounded-[24px] border border-[#DDE4DE] bg-white p-5 shadow-[0_8px_28px_rgba(38,61,49,0.05)] sm:p-8">
-          <div className="flex items-center gap-2 text-[#6F8C7A]">
+        <section className="rounded-[24px] border border-[#E0D4E8] bg-white p-5 shadow-[0_8px_28px_rgba(52,31,96,0.05)] sm:p-8">
+          <div className="flex items-center gap-2 text-[#7D4698]">
             <Icon name="instagram" className="size-4" />
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em]">
               Post caption (shown below the whole post)
             </h2>
           </div>
-          <p className="mt-4 max-w-4xl whitespace-pre-wrap text-[15px] leading-7 text-[#3D5046]">
+          <p className="mt-4 max-w-4xl whitespace-pre-wrap text-[15px] leading-7 text-[#4F3D69]">
             {post.postCaption}
           </p>
         </section>
@@ -967,13 +949,13 @@ export default function AugustContentCalendarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F2] text-[#293F34]">
-      <header className="border-b border-[#E0E5E0] bg-white px-5 py-4 sm:px-8">
+    <div className="min-h-screen bg-[#FFF9EF] text-[#341F60]">
+      <header className="border-b border-[#E3D8EA] bg-white px-5 py-4 sm:px-8">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4">
-          <Logo />
-          <p className="text-right text-[11px] leading-5 text-[#87928B]">
-            Assigned to: <span className="font-medium text-[#5D6C64]">Emilia</span>
-            <span className="mx-1.5 text-[#B3BBB6]">·</span>
+          <UnderstoryBrand />
+          <p className="text-right text-[11px] leading-5 text-[#8B7895]">
+            Assigned to: <span className="font-medium text-[#695677]">Emilia</span>
+            <span className="mx-1.5 text-[#B39FBE]">·</span>
             Graphic designer
           </p>
         </div>
@@ -982,24 +964,24 @@ export default function AugustContentCalendarPage() {
       <main className="mx-auto max-w-[1200px] px-5 py-9 sm:px-8 sm:py-12">
         <section className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9B7653]">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
               Content production · August 2026
             </p>
-            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#263E32] sm:text-4xl lg:text-[42px]">
+            <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl lg:text-[42px]">
               MVP — Social media · August content calendar
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#718078] sm:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
               Open a post to review the copy, visual direction, and captions for every slide.
             </p>
           </div>
-          <div className="flex items-center gap-2 self-start rounded-full border border-[#DDE4DE] bg-white px-4 py-2 text-xs font-medium text-[#5B6A62] shadow-sm sm:self-auto">
-            <span className="size-2 rounded-full bg-[#7A9D87]" />
+          <div className="flex items-center gap-2 self-start rounded-full border border-[#E0D4E8] bg-white px-4 py-2 text-xs font-medium text-[#695677] shadow-sm sm:self-auto">
+            <span className="size-2 rounded-full bg-[#7D4698]" />
             {isLoading ? "Loading posts…" : `${posts.length} posts assigned`}
           </div>
         </section>
 
-        <div className="mt-6 flex max-w-3xl items-start gap-2 rounded-2xl border border-[#DDE5DF] bg-white/70 px-4 py-3 text-xs leading-5 text-[#66756D]">
-          <Icon name="link" className="mt-0.5 size-4 shrink-0 text-[#6F8D7B]" />
+        <div className="mt-6 flex max-w-3xl items-start gap-2 rounded-2xl border border-[#E0D4E8] bg-white/70 px-4 py-3 text-xs leading-5 text-[#75647F]">
+          <Icon name="link" className="mt-0.5 size-4 shrink-0 text-[#7D4698]" />
           <p>
             Paste a Google Drive link — make sure it&apos;s shared as
             &apos;Anyone with the link can view&apos; so it previews correctly here.
@@ -1026,13 +1008,13 @@ export default function AugustContentCalendarPage() {
                 ? Array.from({ length: 4 }, (_, index) => (
                     <div
                       key={index}
-                      className="h-[520px] w-[82vw] max-w-[360px] shrink-0 animate-pulse rounded-[24px] border border-[#E1E6E1] bg-white sm:w-[360px]"
+                      className="h-[520px] w-[82vw] max-w-[360px] shrink-0 animate-pulse rounded-[24px] border border-[#E5DBEC] bg-white sm:w-[360px]"
                     >
-                      <div className="aspect-[16/10] bg-[#E5EAE5]" />
+                      <div className="aspect-[16/10] bg-[#E9DFF1]" />
                       <div className="space-y-4 p-6">
-                        <div className="h-5 w-3/4 rounded bg-[#E8ECE8]" />
-                        <div className="h-3 w-full rounded bg-[#EEF1EE]" />
-                        <div className="h-3 w-5/6 rounded bg-[#EEF1EE]" />
+                        <div className="h-5 w-3/4 rounded bg-[#EEE6F4]" />
+                        <div className="h-3 w-full rounded bg-[#F0E8F6]" />
+                        <div className="h-3 w-5/6 rounded bg-[#F0E8F6]" />
                       </div>
                     </div>
                   ))
@@ -1051,7 +1033,7 @@ export default function AugustContentCalendarPage() {
                     />
                   ))}
               {!isLoading && posts.length === 0 && (
-                <div className="w-full rounded-[24px] border border-dashed border-[#CCD6CE] bg-white px-6 py-12 text-center text-sm text-[#718078]">
+                <div className="w-full rounded-[24px] border border-dashed border-[#DED0E7] bg-white px-6 py-12 text-center text-sm text-[#75647F]">
                   No assigned tasks found. Run the seed script, then refresh this page.
                 </div>
               )}
@@ -1059,11 +1041,11 @@ export default function AugustContentCalendarPage() {
 
             {postRailState.canScrollLeft && (
               <>
-                <div className="pointer-events-none absolute inset-y-0 left-12 w-10 bg-gradient-to-r from-[#F4F6F2] to-transparent sm:left-14" />
+                <div className="pointer-events-none absolute inset-y-0 left-12 w-10 bg-gradient-to-r from-[#FFF9EF] to-transparent sm:left-14" />
                 <button
                   type="button"
                   onClick={() => scrollPostRail("left")}
-                  className="absolute left-0 top-1/2 z-40 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#CBD6CE] bg-white text-[#40564A] shadow-[0_6px_20px_rgba(38,61,49,0.2)] transition hover:scale-105 hover:bg-[#F7F9F7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E967F]"
+                  className="absolute left-0 top-1/2 z-40 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-[0_6px_20px_rgba(52,31,96,0.2)] transition hover:scale-105 hover:bg-[#F7F1FB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
                 >
                   <Icon name="arrow" className="size-5" />
                   <span className="sr-only">Scroll to previous posts</span>
@@ -1073,11 +1055,11 @@ export default function AugustContentCalendarPage() {
 
             {postRailState.canScrollRight && (
               <>
-                <div className="pointer-events-none absolute inset-y-0 right-12 w-10 bg-gradient-to-l from-[#F4F6F2] to-transparent sm:right-14" />
+                <div className="pointer-events-none absolute inset-y-0 right-12 w-10 bg-gradient-to-l from-[#FFF9EF] to-transparent sm:right-14" />
                 <button
                   type="button"
                   onClick={() => scrollPostRail("right")}
-                  className="absolute right-0 top-1/2 z-40 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#CBD6CE] bg-white text-[#40564A] shadow-[0_6px_20px_rgba(38,61,49,0.2)] transition hover:scale-105 hover:bg-[#F7F9F7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E967F]"
+                  className="absolute right-0 top-1/2 z-40 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#4F3D69] shadow-[0_6px_20px_rgba(52,31,96,0.2)] transition hover:scale-105 hover:bg-[#F7F1FB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
                 >
                   <Icon name="chevron" className="size-5" />
                   <span className="sr-only">Scroll to more posts</span>
@@ -1087,15 +1069,15 @@ export default function AugustContentCalendarPage() {
           </div>
 
           {postRailState.hasOverflow && (
-            <div className="mt-1 flex items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#929D96]">
-              <span className="h-px w-7 bg-[#CAD2CC]" />
+            <div className="mt-1 flex items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[#8B7895]">
+              <span className="h-px w-7 bg-[#D7C8E0]" />
               Swipe or use arrows for more
               <Icon name="chevron" className="size-3" />
             </div>
           )}
         </section>
 
-        <footer className="mt-10 flex flex-col gap-1 border-t border-[#DCE3DD] py-6 text-xs text-[#8A958E] sm:flex-row sm:justify-between">
+        <footer className="mt-10 flex flex-col gap-1 border-t border-[#E0D4E8] py-6 text-xs text-[#8B7895] sm:flex-row sm:justify-between">
           <p>Motion Vitality Pilates · Internal content workspace</p>
           <p>Changes are saved automatically.</p>
         </footer>
