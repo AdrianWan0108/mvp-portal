@@ -3,7 +3,21 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import {
+  readTeamSessionProfile,
+  type TeamAccessLevel,
+} from "@/app/team-hub/_components/TeamIdentity";
+import {
+  TeamButton,
+  TeamModal,
+  teamInputClass,
+} from "@/app/team-hub/_components/TeamHubUi";
+import {
+  WORKSPACE_CLIENTS,
+  isWorkspaceClientSlug,
+} from "@/lib/workspace-clients";
 import { UnderstoryBrand } from "../../../_components/UnderstoryBrand";
 
 type PostStatus =
@@ -29,6 +43,7 @@ type Post = {
   brief: string;
   status: PostStatus;
   postCaption: string;
+  assignedTo: string | null;
   slides: Slide[];
 };
 
@@ -48,6 +63,7 @@ type TaskRow = {
   brief: string;
   status: string;
   post_caption: string;
+  assigned_to: string | null;
   created_at: string;
   task_slides: TaskSlideRow[] | null;
 };
@@ -66,6 +82,7 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
     brief: task.brief,
     status: isPostStatus(task.status) ? task.status : "not_started",
     postCaption: task.post_caption,
+    assignedTo: task.assigned_to,
     slides: (task.task_slides ?? [])
       .sort((a, b) => a.slide_number - b.slide_number)
       .map((slide) => ({
@@ -79,6 +96,8 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
       })),
   }));
 }
+
+const taskAssignees = ["Arion", "Sure", "Emilia"] as const;
 
 const statusDetails: Record<
   PostStatus,
@@ -338,12 +357,22 @@ function PostCard({
   onSubmitForReview,
   onCancelSubmission,
   onOpen,
+  canManage,
+  onAssign,
+  onEdit,
+  onDelete,
+  confirmDelete,
 }: {
   post: Post;
   status: PostStatus;
   onSubmitForReview: () => void;
   onCancelSubmission: () => void;
   onOpen: () => void;
+  canManage: boolean;
+  onAssign: (assignedTo: string | null) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  confirmDelete: boolean;
 }) {
   const cardCoverImage = getCardCoverImage(post);
   const [coverPrimary, coverSecondary] =
@@ -424,6 +453,35 @@ function PostCard({
             </button>
           )}
         </div>
+        <div className="relative z-20 mt-4 flex flex-wrap items-center gap-2">
+          {canManage ? (
+            <>
+              <select
+                aria-label={`Assign ${post.title} to`}
+                value={post.assignedTo ?? ""}
+                onChange={(event) => onAssign(event.target.value || null)}
+                className="min-w-0 flex-1 rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698]"
+              >
+                <option value="">Unassigned</option>
+                {taskAssignees.map((assignee) => (
+                  <option key={assignee} value={assignee}>
+                    {assignee}
+                  </option>
+                ))}
+              </select>
+              <TeamButton type="button" tone="secondary" onClick={onEdit}>
+                Edit
+              </TeamButton>
+              <TeamButton type="button" tone="danger" onClick={onDelete}>
+                {confirmDelete ? "Confirm delete?" : "Delete"}
+              </TeamButton>
+            </>
+          ) : (
+            <span className="text-[11px] font-medium text-[#8B7895]">
+              Assigned to {post.assignedTo}
+            </span>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -435,12 +493,14 @@ function SlidePreview({
   previewUrl,
   onImageSave,
   onClearImage,
+  canManage,
 }: {
   post: Post;
   slide: Slide;
   previewUrl?: string;
   onImageSave: (link: string) => void;
   onClearImage: () => void;
+  canManage: boolean;
 }) {
   const [primary, secondary] = slidePalettes[(post.id - 1) % slidePalettes.length];
   const textParts = slide.onScreenText.split(" / ");
@@ -501,6 +561,7 @@ function SlidePreview({
       </div>
 
       <div className="mt-5 rounded-[20px] border border-[#E3D8EA] bg-white p-5">
+        {canManage && (
         <div className="mb-4 border-b border-[#EEE6F4] pb-4">
           <DriveLinkInput
             key={previewUrl || "empty"}
@@ -510,6 +571,7 @@ function SlidePreview({
             onClear={onClearImage}
           />
         </div>
+        )}
         {slide.warningFlag && (
           <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#E4C586] bg-[#FFF7E5] px-3 py-2.5 text-xs font-medium leading-5 text-[#805A22]">
             <Icon name="warning" className="mt-0.5 size-4 shrink-0" />
@@ -544,6 +606,7 @@ function PostDetail({
   onSlideImageSave,
   onClearSlideImage,
   onClose,
+  canManage,
 }: {
   post: Post;
   status: PostStatus;
@@ -551,6 +614,7 @@ function PostDetail({
   onSlideImageSave: (slideNumber: number, link: string) => void;
   onClearSlideImage: (slideNumber: number) => void;
   onClose: () => void;
+  canManage: boolean;
 }) {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeSlide, setActiveSlide] = useState(0);
@@ -692,6 +756,7 @@ function PostDetail({
                   onSlideImageSave(slide.slideNumber, link)
                 }
                 onClearImage={() => onClearSlideImage(slide.slideNumber)}
+                canManage={canManage}
               />
             ))}
           </div>
@@ -716,13 +781,142 @@ function PostDetail({
   );
 }
 
+type PostEditorState = {
+  post?: Post;
+  title: string;
+  brief: string;
+  postCaption: string;
+  status: PostStatus;
+  assignedTo: string;
+};
+
+function PostEditorModal({
+  editor,
+  isSaving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  editor: PostEditorState | null;
+  isSaving: boolean;
+  onChange: (editor: PostEditorState) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <TeamModal
+      open={Boolean(editor)}
+      title={editor?.post ? "Edit social media task" : "Add social media task"}
+      description="Manage the carousel brief and assignment. Slide content remains in the task detail."
+      submitLabel={editor?.post ? "Save changes" : "Add task"}
+      isSaving={isSaving}
+      submitDisabled={!editor?.title.trim()}
+      onClose={onClose}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      {editor && (
+        <div className="space-y-4">
+          <label className="block text-xs font-semibold text-[#341F60]">
+            Title
+            <input
+              value={editor.title}
+              onChange={(event) =>
+                onChange({ ...editor, title: event.target.value })
+              }
+              className={`mt-2 ${teamInputClass}`}
+            />
+          </label>
+          <label className="block text-xs font-semibold text-[#341F60]">
+            Brief
+            <textarea
+              rows={4}
+              value={editor.brief}
+              onChange={(event) =>
+                onChange({ ...editor, brief: event.target.value })
+              }
+              className={`mt-2 resize-none ${teamInputClass}`}
+            />
+          </label>
+          <label className="block text-xs font-semibold text-[#341F60]">
+            Post caption
+            <textarea
+              rows={5}
+              value={editor.postCaption}
+              onChange={(event) =>
+                onChange({ ...editor, postCaption: event.target.value })
+              }
+              className={`mt-2 resize-none ${teamInputClass}`}
+            />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-[#341F60]">
+              Status
+              <select
+                value={editor.status}
+                onChange={(event) =>
+                  onChange({
+                    ...editor,
+                    status: event.target.value as PostStatus,
+                  })
+                }
+                className={`mt-2 ${teamInputClass}`}
+              >
+                {Object.entries(statusDetails).map(([value, details]) => (
+                  <option key={value} value={value}>
+                    {details.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-[#341F60]">
+              Assign to
+              <select
+                value={editor.assignedTo}
+                onChange={(event) =>
+                  onChange({ ...editor, assignedTo: event.target.value })
+                }
+                className={`mt-2 ${teamInputClass}`}
+              >
+                <option value="">Unassigned</option>
+                {taskAssignees.map((assignee) => (
+                  <option key={assignee} value={assignee}>
+                    {assignee}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+    </TeamModal>
+  );
+}
+
 export default function AugustContentCalendarPage() {
+  const pathname = usePathname();
+  const routeClientSlug = pathname.split("/")[2] ?? null;
+  const clientSlug = isWorkspaceClientSlug(routeClientSlug)
+    ? routeClientSlug
+    : "mvp";
+  const clientLabel = WORKSPACE_CLIENTS[clientSlug].name;
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [statuses, setStatuses] = useState<Record<number, PostStatus>>({});
   const [slideImageLinks, setSlideImageLinks] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [teamProfile, setTeamProfile] = useState<{
+    name: string;
+    accessLevel: TeamAccessLevel;
+  } | null>(null);
+  const [isTeamProfileReady, setIsTeamProfileReady] = useState(false);
+  const [editor, setEditor] = useState<PostEditorState | null>(null);
+  const [isSavingPost, setIsSavingPost] = useState(false);
+  const [deletePostId, setDeletePostId] = useState<number | null>(null);
   const [postRailState, setPostRailState] = useState({
     canScrollLeft: false,
     canScrollRight: false,
@@ -731,13 +925,48 @@ export default function AugustContentCalendarPage() {
   const postRailRef = useRef<HTMLDivElement>(null);
 
   const selectedPost = posts.find((post) => post.id === selectedPostId);
+  const canManage = teamProfile?.accessLevel === "owner";
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const profile = readTeamSessionProfile();
+      setTeamProfile(
+        profile
+          ? { name: profile.name, accessLevel: profile.accessLevel }
+          : null,
+      );
+      setIsTeamProfileReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!isTeamProfileReady || !teamProfile) return;
     let isActive = true;
+    const activeProfile = teamProfile;
 
     async function loadPosts() {
       setIsLoading(true);
-      const { data, error } = await supabase
+      setPosts([]);
+      setSelectedPostId(null);
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("slug", clientSlug)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (clientError || !client) {
+        setErrorMessage(
+          `Could not load ${clientLabel}: ${clientError?.message ?? "Client not found."}`,
+        );
+        setIsLoading(false);
+        return;
+      }
+      setClientId(client.id);
+
+      let query = supabase
         .from("tasks")
         .select(
           `
@@ -746,6 +975,7 @@ export default function AugustContentCalendarPage() {
             brief,
             status,
             post_caption,
+            assigned_to,
             created_at,
             task_slides (
               id,
@@ -758,8 +988,12 @@ export default function AugustContentCalendarPage() {
             )
           `,
         )
-        .eq("assignee", "Emilia")
+        .eq("client_id", client.id)
         .order("created_at", { ascending: true });
+      if (activeProfile.accessLevel === "staff") {
+        query = query.eq("assigned_to", activeProfile.name);
+      }
+      const { data, error } = await query;
 
       if (!isActive) return;
 
@@ -796,7 +1030,7 @@ export default function AugustContentCalendarPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientLabel, clientSlug, isTeamProfileReady, teamProfile]);
 
   const updatePostRailState = useCallback(() => {
     const rail = postRailRef.current;
@@ -866,6 +1100,7 @@ export default function AugustContentCalendarPage() {
     slideNumber: number,
     rawLink: string,
   ) {
+    if (!canManage) return;
     const post = posts.find((candidate) => candidate.id === postId);
     const slide = post?.slides.find(
       (candidate) => candidate.slideNumber === slideNumber,
@@ -901,6 +1136,7 @@ export default function AugustContentCalendarPage() {
   }
 
   async function clearSlideImage(postId: number, slideNumber: number) {
+    if (!canManage) return;
     const post = posts.find((candidate) => candidate.id === postId);
     const slide = post?.slides.find(
       (candidate) => candidate.slideNumber === slideNumber,
@@ -939,6 +1175,99 @@ export default function AugustContentCalendarPage() {
     setErrorMessage(null);
   }
 
+  async function assignPost(postId: number, assignedTo: string | null) {
+    if (!canManage) return;
+    const post = posts.find((candidate) => candidate.id === postId);
+    if (!post) return;
+    const previous = post.assignedTo;
+    setPosts((current) =>
+      current.map((candidate) =>
+        candidate.id === postId
+          ? { ...candidate, assignedTo }
+          : candidate,
+      ),
+    );
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        assigned_to: assignedTo,
+        assignee: assignedTo ?? "Unassigned",
+      })
+      .eq("id", post.databaseId);
+    if (error) {
+      setPosts((current) =>
+        current.map((candidate) =>
+          candidate.id === postId
+            ? { ...candidate, assignedTo: previous }
+            : candidate,
+        ),
+      );
+      setErrorMessage(`Could not reassign the task: ${error.message}`);
+    }
+  }
+
+  function openPostEditor(post?: Post) {
+    if (!canManage) return;
+    setEditor({
+      post,
+      title: post?.title ?? "",
+      brief: post?.brief ?? "",
+      postCaption: post?.postCaption ?? "",
+      status: post?.status ?? "not_started",
+      assignedTo: post?.assignedTo ?? "",
+    });
+  }
+
+  async function savePost() {
+    if (!canManage || !editor || !clientId || !editor.title.trim()) return;
+    setIsSavingPost(true);
+    const payload = {
+      client_id: clientId,
+      title: editor.title.trim(),
+      brief: editor.brief.trim(),
+      post_caption: editor.postCaption.trim(),
+      status: editor.status,
+      assigned_to: editor.assignedTo || null,
+      assignee: editor.assignedTo || "Unassigned",
+    };
+    const mutation = editor.post
+      ? supabase
+          .from("tasks")
+          .update(payload)
+          .eq("id", editor.post.databaseId)
+      : supabase.from("tasks").insert(payload);
+    const { error } = await mutation;
+    setIsSavingPost(false);
+    if (error) {
+      setErrorMessage(`Could not save the social media task: ${error.message}`);
+      return;
+    }
+    setEditor(null);
+    setErrorMessage(null);
+    window.location.reload();
+  }
+
+  async function deletePost(post: Post) {
+    if (!canManage) return;
+    if (deletePostId !== post.id) {
+      setDeletePostId(post.id);
+      return;
+    }
+    const { error } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", post.databaseId);
+    if (error) {
+      setErrorMessage(`Could not delete the task: ${error.message}`);
+      return;
+    }
+    setPosts((current) =>
+      current.filter((candidate) => candidate.id !== post.id),
+    );
+    setDeletePostId(null);
+    setSelectedPostId(null);
+  }
+
   function scrollPostRail(direction: "left" | "right") {
     const rail = postRailRef.current;
     if (!rail) return;
@@ -954,9 +1283,16 @@ export default function AugustContentCalendarPage() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4">
           <UnderstoryBrand />
           <p className="text-right text-[11px] leading-5 text-[#8B7895]">
-            Assigned to: <span className="font-medium text-[#695677]">Emilia</span>
-            <span className="mx-1.5 text-[#B39FBE]">·</span>
-            Graphic designer
+            {canManage ? (
+              "Owner view · All assignments"
+            ) : (
+              <>
+                Assigned to:{" "}
+                <span className="font-medium text-[#695677]">
+                  {teamProfile?.name ?? "Team member"}
+                </span>
+              </>
+            )}
           </p>
         </div>
       </header>
@@ -968,7 +1304,7 @@ export default function AugustContentCalendarPage() {
               Content production · August 2026
             </p>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl lg:text-[42px]">
-              MVP — Social media · August content calendar
+              {clientLabel} — Social media · August content calendar
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
               Open a post to review the copy, visual direction, and captions for every slide.
@@ -980,6 +1316,7 @@ export default function AugustContentCalendarPage() {
           </div>
         </section>
 
+        {canManage && (
         <div className="mt-6 flex max-w-3xl items-start gap-2 rounded-2xl border border-[#E0D4E8] bg-white/70 px-4 py-3 text-xs leading-5 text-[#75647F]">
           <Icon name="link" className="mt-0.5 size-4 shrink-0 text-[#7D4698]" />
           <p>
@@ -987,6 +1324,7 @@ export default function AugustContentCalendarPage() {
             &apos;Anyone with the link can view&apos; so it previews correctly here.
           </p>
         </div>
+        )}
 
         {errorMessage && (
           <div
@@ -998,6 +1336,13 @@ export default function AugustContentCalendarPage() {
         )}
 
         <section aria-label="Assigned posts" className="mt-9">
+          {canManage && (
+            <div className="mb-4 flex justify-end">
+              <TeamButton type="button" onClick={() => openPostEditor()}>
+                + Add task
+              </TeamButton>
+            </div>
+          )}
           <div className="relative px-12 sm:px-14">
             <div
               ref={postRailRef}
@@ -1030,11 +1375,18 @@ export default function AugustContentCalendarPage() {
                         void updateStatus(post.id, "not_started")
                       }
                       onOpen={() => setSelectedPostId(post.id)}
+                      canManage={canManage}
+                      onAssign={(assignedTo) =>
+                        void assignPost(post.id, assignedTo)
+                      }
+                      onEdit={() => openPostEditor(post)}
+                      onDelete={() => void deletePost(post)}
+                      confirmDelete={deletePostId === post.id}
                     />
                   ))}
               {!isLoading && posts.length === 0 && (
                 <div className="w-full rounded-[24px] border border-dashed border-[#DED0E7] bg-white px-6 py-12 text-center text-sm text-[#75647F]">
-                  No assigned tasks found. Run the seed script, then refresh this page.
+                  No social media tasks have been added for {clientLabel} yet.
                 </div>
               )}
             </div>
@@ -1078,7 +1430,7 @@ export default function AugustContentCalendarPage() {
         </section>
 
         <footer className="mt-10 flex flex-col gap-1 border-t border-[#E0D4E8] py-6 text-xs text-[#8B7895] sm:flex-row sm:justify-between">
-          <p>Motion Vitality Pilates · Internal content workspace</p>
+          <p>{clientLabel} · Internal content workspace</p>
           <p>Changes are saved automatically.</p>
         </footer>
       </main>
@@ -1096,8 +1448,16 @@ export default function AugustContentCalendarPage() {
             void clearSlideImage(selectedPost.id, slideNumber)
           }
           onClose={() => setSelectedPostId(null)}
+          canManage={canManage}
         />
       )}
+      <PostEditorModal
+        editor={editor}
+        isSaving={isSavingPost}
+        onChange={setEditor}
+        onClose={() => setEditor(null)}
+        onSave={() => void savePost()}
+      />
     </div>
   );
 }

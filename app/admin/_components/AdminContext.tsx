@@ -8,16 +8,15 @@ import {
   useState,
 } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  WORKSPACE_CLIENTS,
+  isWorkspaceClientSlug,
+  type WorkspaceClientSlug,
+} from "@/lib/workspace-clients";
 
-export type AdminClientSlug = "mvp" | "boardwalk";
+export type AdminClientSlug = WorkspaceClientSlug;
 
-export const ADMIN_CLIENTS: Record<
-  AdminClientSlug,
-  { name: string; slug: AdminClientSlug }
-> = {
-  mvp: { name: "MVP", slug: "mvp" },
-  boardwalk: { name: "Boardwalk", slug: "boardwalk" },
-};
+export const ADMIN_CLIENTS = WORKSPACE_CLIENTS;
 
 export const ADMIN_USERNAME = "understory_admin";
 export const ADMIN_PASSWORD = "understory2026";
@@ -52,10 +51,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       const authenticated = window.sessionStorage.getItem(AUTH_KEY) === "true";
       const savedClient = window.sessionStorage.getItem(CLIENT_KEY);
       setIsAuthenticated(authenticated);
-      if (
-        authenticated &&
-        (savedClient === "mvp" || savedClient === "boardwalk")
-      ) {
+      if (authenticated && isWorkspaceClientSlug(savedClient)) {
         setClientSlug(savedClient);
       }
       setIsReady(true);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import understoryLogo from "@/public/under story logo-purple.png";
+import { ClientSelect } from "@/app/_components/ClientSelect";
 import {
   ADMIN_CLIENTS,
   AdminProvider,
@@ -101,6 +102,14 @@ function LoginScreen() {
 function ClientChooser() {
   const { selectClient, logout } = useAdmin();
   const router = useRouter();
+  const [selectedClient, setSelectedClient] =
+    useState<AdminClientSlug>("mvp");
+  const clientOptions = (Object.keys(ADMIN_CLIENTS) as AdminClientSlug[]).map(
+    (slug) => ({
+      value: slug,
+      label: ADMIN_CLIENTS[slug].name,
+    }),
+  );
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#E9E0EF] px-5 py-10">
@@ -114,25 +123,26 @@ function ClientChooser() {
         <p className="mt-2 text-sm text-[#75647F]">
           All admin pages will be scoped to this client until you switch.
         </p>
-        <div className="mt-7 grid gap-4 sm:grid-cols-2">
-          {(Object.keys(ADMIN_CLIENTS) as AdminClientSlug[]).map((slug) => (
-            <button
-              key={slug}
-              type="button"
-              onClick={() => {
-                selectClient(slug);
-                router.push("/admin/dashboard");
-              }}
-              className="rounded-2xl border border-[#CDBAD9] bg-[#FFFDF8] p-6 text-left transition hover:-translate-y-0.5 hover:border-[#7D4698] hover:bg-[#EEE3FA]"
-            >
-              <span className="text-xl font-semibold text-[#341F60]">
-                {ADMIN_CLIENTS[slug].name}
-              </span>
-              <span className="mt-2 block text-xs text-[#75647F]">
-                Open admin dashboard →
-              </span>
-            </button>
-          ))}
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+          <ClientSelect
+            value={selectedClient}
+            onChange={(value) =>
+              setSelectedClient(value as AdminClientSlug)
+            }
+            options={clientOptions}
+            ariaLabel="Choose admin client workspace"
+            className="w-full flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              selectClient(selectedClient);
+              router.push("/admin/dashboard");
+            }}
+            className="rounded-xl bg-[#341F60] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#28154F]"
+          >
+            Continue
+          </button>
         </div>
         <button
           type="button"
@@ -154,6 +164,7 @@ function AdminShellContent({ children }: { children: React.ReactNode }) {
     isAuthenticated,
     clientSlug,
     clientName,
+    clientId,
     clientError,
     selectClient,
     logout,
@@ -162,11 +173,17 @@ function AdminShellContent({ children }: { children: React.ReactNode }) {
   if (!isReady) return <div className="min-h-screen bg-[#E9E0EF]" />;
   if (!isAuthenticated) return <LoginScreen />;
   if (!clientSlug) return <ClientChooser />;
+  const clientOptions = (Object.keys(ADMIN_CLIENTS) as AdminClientSlug[]).map(
+    (slug) => ({
+      value: slug,
+      label: ADMIN_CLIENTS[slug].name,
+    }),
+  );
 
   return (
     <div className="min-h-screen bg-[#F4EEF8] text-[#28154F]">
       <header className="sticky top-0 z-50 border-b border-[#CDBAD9] bg-[#28154F] px-4 py-3 text-white shadow-lg sm:px-6">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <Image
               src={understoryLogo}
@@ -180,21 +197,16 @@ function AdminShellContent({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              aria-label="Switch admin client"
+            <ClientSelect
               value={clientSlug}
-              onChange={(event) => {
-                selectClient(event.target.value as AdminClientSlug);
+              onChange={(value) => {
+                selectClient(value as AdminClientSlug);
                 router.refresh();
               }}
-              className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-xs font-semibold text-white focus:outline-none"
-            >
-              {(Object.keys(ADMIN_CLIENTS) as AdminClientSlug[]).map((slug) => (
-                <option key={slug} value={slug} className="text-[#28154F]">
-                  {ADMIN_CLIENTS[slug].name}
-                </option>
-              ))}
-            </select>
+              options={clientOptions}
+              ariaLabel="Switch admin client"
+              tone="dark"
+            />
             <button
               type="button"
               onClick={() => {
@@ -239,6 +251,8 @@ function AdminShellContent({ children }: { children: React.ReactNode }) {
             <div className="m-6 rounded-xl bg-[#FFF0F0] p-4 text-sm text-[#8B3E3E]">
               {clientError}
             </div>
+          ) : !clientId ? (
+            <div className="m-6 h-52 animate-pulse rounded-[22px] border border-[#D7CBE0] bg-white" />
           ) : (
             children
           )}

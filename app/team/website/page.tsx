@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { ClientSelect } from "@/app/_components/ClientSelect";
+import {
+  readTeamSessionProfile,
+  type TeamAccessLevel,
+} from "@/app/team-hub/_components/TeamIdentity";
+import {
+  WORKSPACE_CLIENTS,
+  WORKSPACE_CLIENT_SLUGS,
+  isWorkspaceClientSlug,
+  type WorkspaceClientSlug,
+} from "@/lib/workspace-clients";
 import { UnderstoryBrand } from "../_components/UnderstoryBrand";
 
-type ClientSlug = "mvp" | "boardwalk";
+type ClientSlug = WorkspaceClientSlug;
 type ColumnStatus =
   | "needs_content"
   | "ux_design"
@@ -24,6 +36,7 @@ type WebsiteTask = {
   column_status: ColumnStatus;
   priority: Priority;
   live_url: string | null;
+  assigned_to: string | null;
   created_at: string;
 };
 
@@ -52,10 +65,7 @@ type ClientRow = {
   slug: string;
 };
 
-const clients: Record<ClientSlug, { label: string }> = {
-  mvp: { label: "MVP" },
-  boardwalk: { label: "Boardwalk" },
-};
+const taskAssignees = ["Arion", "Sure", "Emilia"] as const;
 
 const columns: Array<{
   id: ColumnStatus;
@@ -261,9 +271,13 @@ function formatTaskDate(value: string) {
 function TaskListRow({
   task,
   onOpen,
+  canManage,
+  onAssign,
 }: {
   task: WebsiteTask;
   onOpen: () => void;
+  canManage: boolean;
+  onAssign: (assignedTo: string | null) => void;
 }) {
   const column = columns.find((candidate) => candidate.id === task.column_status);
 
@@ -293,6 +307,32 @@ function TaskListRow({
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+        {canManage ? (
+          <label
+            className="relative z-10"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="sr-only">Assign {task.title} to</span>
+            <select
+              value={task.assigned_to ?? ""}
+              onChange={(event) =>
+                onAssign(event.target.value || null)
+              }
+              className="rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698] focus:ring-2 focus:ring-[#EEE3FA]"
+            >
+              <option value="">Unassigned</option>
+              {taskAssignees.map((assignee) => (
+                <option key={assignee} value={assignee}>
+                  {assignee}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span className="text-[11px] font-medium text-[#8B7895]">
+            {task.assigned_to}
+          </span>
+        )}
         <span
           className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={{ backgroundColor: column?.tint, color: column?.text }}
@@ -325,11 +365,13 @@ function AddTaskModal({
     title: string;
     description: string;
     priority: Priority;
+    assignedTo: string | null;
   }) => Promise<boolean>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("normal");
+  const [assignedTo, setAssignedTo] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -340,6 +382,7 @@ function AddTaskModal({
       title: title.trim(),
       description: description.trim(),
       priority,
+      assignedTo: assignedTo || null,
     });
     setIsSaving(false);
     if (didCreate) onClose();
@@ -432,6 +475,24 @@ function AddTaskModal({
             </div>
           </fieldset>
 
+          <label className="block">
+            <span className="text-xs font-semibold text-[#695677]">
+              Assign to
+            </span>
+            <select
+              value={assignedTo}
+              onChange={(event) => setAssignedTo(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-[#DED0E7] bg-[#FFFCF7] px-3.5 py-3 text-sm text-[#341F60] outline-none transition focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
+            >
+              <option value="">Unassigned</option>
+              {taskAssignees.map((assignee) => (
+                <option key={assignee} value={assignee}>
+                  {assignee}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="flex justify-end gap-2 border-t border-[#E9E0EF] pt-5">
             <button
               type="button"
@@ -457,9 +518,11 @@ function AddTaskModal({
 function LiveWebsitePreview({
   taskId,
   url,
+  canManage,
 }: {
   taskId: string;
   url: string;
+  canManage: boolean;
 }) {
   const [previewState, setPreviewState] = useState<
     "loading" | "loaded" | "failed"
@@ -671,25 +734,27 @@ function LiveWebsitePreview({
               : `${pins.length} comment pin${pins.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        <button
-          type="button"
-          aria-pressed={isPinMode}
-          onClick={() => {
-            setIsPinMode((current) => !current);
-            setPendingPin(null);
-            setSelectedPinId(null);
-            setConfirmDeletePinId(null);
-            setPinComment("");
-          }}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold transition ${
-            isPinMode
-              ? "border-[#7D4698] bg-[#7D4698] text-white"
-              : "border-[#DED0E7] bg-white text-[#5F3378] hover:bg-[#EEE3FA]"
-          }`}
-        >
-          <Icon name="pin" className="size-3.5" />
-          {isPinMode ? "Click preview to place pin" : "Add comment pin"}
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            aria-pressed={isPinMode}
+            onClick={() => {
+              setIsPinMode((current) => !current);
+              setPendingPin(null);
+              setSelectedPinId(null);
+              setConfirmDeletePinId(null);
+              setPinComment("");
+            }}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold transition ${
+              isPinMode
+                ? "border-[#7D4698] bg-[#7D4698] text-white"
+                : "border-[#DED0E7] bg-white text-[#5F3378] hover:bg-[#EEE3FA]"
+            }`}
+          >
+            <Icon name="pin" className="size-3.5" />
+            {isPinMode ? "Click preview to place pin" : "Add comment pin"}
+          </button>
+        )}
       </div>
 
       <div className="relative mx-auto h-[620px] w-full max-w-[960px] overflow-hidden rounded-2xl border border-[#CDBAD9] bg-white shadow-[0_18px_45px_rgba(52,31,96,0.14)] sm:h-[680px]">
@@ -835,6 +900,7 @@ function LiveWebsitePreview({
                         {formatCommentDate(pin.created_at)}
                       </time>
                     </div>
+                    {canManage && (
                     <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
@@ -871,6 +937,7 @@ function LiveWebsitePreview({
                         <Icon name="close" className="size-3.5" />
                       </button>
                     </div>
+                    )}
                   </div>
                   {confirmDeletePinId === pin.id && (
                     <p className="mt-2 text-right text-[9px] font-semibold text-[#A1533A]">
@@ -913,6 +980,8 @@ function TaskDetailPanel({
   onChangeStatus,
   onMarkReady,
   onDelete,
+  canManage,
+  actorName,
 }: {
   task: WebsiteTask;
   onClose: () => void;
@@ -925,6 +994,8 @@ function TaskDetailPanel({
   onChangeStatus: (status: ColumnStatus) => Promise<boolean>;
   onMarkReady: () => Promise<boolean>;
   onDelete: () => Promise<void>;
+  canManage: boolean;
+  actorName: string;
 }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -1015,7 +1086,7 @@ function TaskDetailPanel({
     setIsAddingComment(true);
     const { data, error } = await supabase
       .from("page_comments")
-      .insert({ task_id: task.id, author: "Karen", comment })
+      .insert({ task_id: task.id, author: actorName, comment })
       .select("id, task_id, author, comment, created_at")
       .single();
     setIsAddingComment(false);
@@ -1128,6 +1199,7 @@ function TaskDetailPanel({
               Save the published page address to preview it here.
             </p>
           </div>
+          {canManage ? (
           <form onSubmit={saveLiveUrl} className="flex flex-col gap-2 sm:flex-row">
             <input
               type="url"
@@ -1144,6 +1216,11 @@ function TaskDetailPanel({
               {isSavingUrl ? "Saving…" : "Save URL"}
             </button>
           </form>
+          ) : (
+            <p className="rounded-xl border border-[#E5DBEC] bg-[#FCF8FF] px-4 py-3 text-sm text-[#695677]">
+              {savedLiveUrl || "No live URL has been saved yet."}
+            </p>
+          )}
         </section>
 
         {savedLiveUrl && (
@@ -1152,6 +1229,7 @@ function TaskDetailPanel({
               key={savedLiveUrl}
               taskId={task.id}
               url={savedLiveUrl}
+              canManage={canManage}
             />
             <div className="mt-3 text-center">
               <a
@@ -1182,7 +1260,7 @@ function TaskDetailPanel({
               <p className="text-sm font-semibold leading-6 text-[#725727]">
                 This page hasn&apos;t been built yet — jot down what it should include
               </p>
-              {task.column_status !== "needs_content" && (
+              {canManage && task.column_status !== "needs_content" && (
                 <button
                   type="button"
                   onClick={() => void markReady()}
@@ -1224,6 +1302,7 @@ function TaskDetailPanel({
             )}
           </div>
 
+          {canManage && (
           <form onSubmit={addComment} className="mt-5">
             <label className="block">
               <span className="text-xs font-semibold text-[#695677]">
@@ -1238,7 +1317,9 @@ function TaskDetailPanel({
               />
             </label>
             <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="text-[10px] text-[#8B7895]">Posting as Karen</p>
+              <p className="text-[10px] text-[#8B7895]">
+                Posting as {actorName}
+              </p>
               <button
                 type="submit"
                 disabled={isAddingComment || !commentDraft.trim()}
@@ -1248,6 +1329,7 @@ function TaskDetailPanel({
               </button>
             </div>
           </form>
+          )}
 
           {commentError && (
             <p className="mt-3 rounded-xl bg-[#FFF1EA] px-3 py-2 text-xs text-[#98573F]">
@@ -1256,6 +1338,7 @@ function TaskDetailPanel({
           )}
         </section>
 
+        {canManage && (
         <section className="mt-9 border-t border-[#E5DBEC] pt-7">
           <h3 className="text-lg font-semibold text-[#341F60]">Page details</h3>
           <form onSubmit={submit} className="mt-5 space-y-6">
@@ -1339,13 +1422,19 @@ function TaskDetailPanel({
             </div>
           </form>
         </section>
+        )}
       </aside>
     </div>
   );
 }
 
-export default function WebsiteDevelopmentPage() {
-  const [selectedClient, setSelectedClient] = useState<ClientSlug>("mvp");
+function WebsiteDevelopmentDashboard() {
+  const searchParams = useSearchParams();
+  const requestedClient = searchParams.get("client");
+  const initialClient: ClientSlug =
+    isWorkspaceClientSlug(requestedClient) ? requestedClient : "mvp";
+  const [selectedClient, setSelectedClient] =
+    useState<ClientSlug>(initialClient);
   const [clientIds, setClientIds] = useState<Partial<Record<ClientSlug, string>>>(
     {},
   );
@@ -1356,8 +1445,18 @@ export default function WebsiteDevelopmentPage() {
   const [addTaskColumn, setAddTaskColumn] = useState<ColumnStatus | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [teamProfile, setTeamProfile] = useState<{
+    name: string;
+    accessLevel: TeamAccessLevel;
+  } | null>(null);
+  const [isTeamProfileReady, setIsTeamProfileReady] = useState(false);
 
   const currentClientId = clientIds[selectedClient];
+  const canManage = teamProfile?.accessLevel === "owner";
+  const clientOptions = WORKSPACE_CLIENT_SLUGS.map((slug) => ({
+    value: slug,
+    label: WORKSPACE_CLIENTS[slug].name,
+  }));
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const statusCounts = useMemo(
     () =>
@@ -1378,13 +1477,26 @@ export default function WebsiteDevelopmentPage() {
   );
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const profile = readTeamSessionProfile();
+      setTeamProfile(
+        profile
+          ? { name: profile.name, accessLevel: profile.accessLevel }
+          : null,
+      );
+      setIsTeamProfileReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
     let isActive = true;
 
     async function loadClients() {
       const { data, error } = await supabase
         .from("clients")
         .select("id, name, slug")
-        .in("slug", ["mvp", "boardwalk"]);
+        .in("slug", WORKSPACE_CLIENT_SLUGS);
 
       if (!isActive) return;
       if (error) {
@@ -1395,20 +1507,13 @@ export default function WebsiteDevelopmentPage() {
 
       const ids: Partial<Record<ClientSlug, string>> = {};
       (data as ClientRow[]).forEach((client) => {
-        if (client.slug === "mvp" || client.slug === "boardwalk") {
+        if (isWorkspaceClientSlug(client.slug)) {
           ids[client.slug] = client.id;
         }
       });
       setClientIds(ids);
       setIsLoadingClients(false);
-
-      if (!ids.mvp || !ids.boardwalk) {
-        setErrorMessage(
-          "MVP or Boardwalk is missing from the clients table. Run the website seed script.",
-        );
-      } else {
-        setErrorMessage(null);
-      }
+      setErrorMessage(null);
     }
 
     void loadClients();
@@ -1418,21 +1523,26 @@ export default function WebsiteDevelopmentPage() {
   }, []);
 
   useEffect(() => {
-    if (!currentClientId) {
+    if (!currentClientId || !isTeamProfileReady || !teamProfile) {
       return;
     }
 
     let isActive = true;
+    const activeProfile = teamProfile;
 
     async function loadTasks() {
       setIsLoadingTasks(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from("website_tasks")
         .select(
-          "id, client_id, title, description, column_status, priority, live_url, created_at",
+          "id, client_id, title, description, column_status, priority, live_url, assigned_to, created_at",
         )
         .eq("client_id", currentClientId)
         .order("created_at", { ascending: true });
+      if (activeProfile.accessLevel === "staff") {
+        query = query.eq("assigned_to", activeProfile.name);
+      }
+      const { data, error } = await query;
 
       if (!isActive) return;
       if (error) {
@@ -1462,7 +1572,7 @@ export default function WebsiteDevelopmentPage() {
     return () => {
       isActive = false;
     };
-  }, [currentClientId]);
+  }, [currentClientId, isTeamProfileReady, teamProfile]);
 
   async function updateTaskStatus(
     taskId: string,
@@ -1504,9 +1614,14 @@ export default function WebsiteDevelopmentPage() {
 
   async function createTask(
     columnStatus: ColumnStatus,
-    values: { title: string; description: string; priority: Priority },
+    values: {
+      title: string;
+      description: string;
+      priority: Priority;
+      assignedTo: string | null;
+    },
   ) {
-    if (!currentClientId) return false;
+    if (!currentClientId || !canManage) return false;
 
     const { data, error } = await supabase
       .from("website_tasks")
@@ -1516,9 +1631,10 @@ export default function WebsiteDevelopmentPage() {
         description: values.description,
         column_status: columnStatus,
         priority: values.priority,
+        assigned_to: values.assignedTo,
       })
       .select(
-        "id, client_id, title, description, column_status, priority, live_url, created_at",
+        "id, client_id, title, description, column_status, priority, live_url, assigned_to, created_at",
       )
       .single();
 
@@ -1536,6 +1652,7 @@ export default function WebsiteDevelopmentPage() {
     taskId: string,
     values: { title: string; description: string; priority: Priority },
   ) {
+    if (!canManage) return false;
     const { error } = await supabase
       .from("website_tasks")
       .update(values)
@@ -1556,6 +1673,7 @@ export default function WebsiteDevelopmentPage() {
   }
 
   async function updateLiveUrl(taskId: string, liveUrl: string | null) {
+    if (!canManage) return false;
     const { error } = await supabase
       .from("website_tasks")
       .update({ live_url: liveUrl })
@@ -1576,6 +1694,7 @@ export default function WebsiteDevelopmentPage() {
   }
 
   async function deleteTask(taskId: string) {
+    if (!canManage) return;
     const { error } = await supabase
       .from("website_tasks")
       .delete()
@@ -1589,6 +1708,28 @@ export default function WebsiteDevelopmentPage() {
     setTasks((current) => current.filter((task) => task.id !== taskId));
     setSelectedTaskId(null);
     setErrorMessage(null);
+  }
+
+  async function assignTask(taskId: string, assignedTo: string | null) {
+    if (!canManage) return;
+    const previous = tasks.find((task) => task.id === taskId)?.assigned_to ?? null;
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId ? { ...task, assigned_to: assignedTo } : task,
+      ),
+    );
+    const { error } = await supabase
+      .from("website_tasks")
+      .update({ assigned_to: assignedTo })
+      .eq("id", taskId);
+    if (error) {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === taskId ? { ...task, assigned_to: previous } : task,
+        ),
+      );
+      setErrorMessage(`Could not reassign the task: ${error.message}`);
+    }
   }
 
   return (
@@ -1617,26 +1758,16 @@ export default function WebsiteDevelopmentPage() {
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#8B7895] md:text-right">
               Client
             </p>
-            <div className="inline-flex rounded-full border border-[#DED0E7] bg-white p-1 shadow-sm">
-              {(Object.keys(clients) as ClientSlug[]).map((slug) => (
-                <button
-                  key={slug}
-                  type="button"
-                  onClick={() => {
-                    setSelectedClient(slug);
-                    setStatusFilter("all");
-                  }}
-                  disabled={isLoadingClients}
-                  className={`min-w-28 rounded-full px-5 py-2.5 text-xs font-semibold transition ${
-                    selectedClient === slug
-                      ? "bg-[#7D4698] text-white shadow-sm"
-                      : "text-[#75647F] hover:bg-[#EEE3FA]"
-                  }`}
-                >
-                  {clients[slug].label}
-                </button>
-              ))}
-            </div>
+            <ClientSelect
+              value={selectedClient}
+              onChange={(value) => {
+                setSelectedClient(value as ClientSlug);
+                setStatusFilter("all");
+              }}
+              options={clientOptions}
+              ariaLabel="Select website client"
+              disabled={isLoadingClients}
+            />
           </div>
         </section>
 
@@ -1650,7 +1781,7 @@ export default function WebsiteDevelopmentPage() {
         )}
 
         <section
-          aria-label={`${clients[selectedClient].label} website status overview`}
+          aria-label={`${WORKSPACE_CLIENTS[selectedClient].name} website status overview`}
           className="mt-9 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
         >
           {summaryMetrics.map((metric) => (
@@ -1683,16 +1814,17 @@ export default function WebsiteDevelopmentPage() {
         </section>
 
         <section
-          aria-label={`${clients[selectedClient].label} website pages`}
+          aria-label={`${WORKSPACE_CLIENTS[selectedClient].name} website pages`}
           className="mt-8"
         >
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-[#341F60]">Pages</h2>
               <p className="mt-1 text-xs text-[#8B7895]">
-                {clients[selectedClient].label} website work, ordered by date added.
+                {WORKSPACE_CLIENTS[selectedClient].name} website work, ordered by date added.
               </p>
             </div>
+            {canManage && (
             <button
               type="button"
               onClick={() => setAddTaskColumn("needs_content")}
@@ -1702,6 +1834,7 @@ export default function WebsiteDevelopmentPage() {
               <Icon name="plus" className="size-3.5" />
               Add task
             </button>
+            )}
           </div>
 
           <div
@@ -1758,6 +1891,10 @@ export default function WebsiteDevelopmentPage() {
                   key={task.id}
                   task={task}
                   onOpen={() => setSelectedTaskId(task.id)}
+                  canManage={canManage}
+                  onAssign={(assignedTo) =>
+                    void assignTask(task.id, assignedTo)
+                  }
                 />
               ))
             ) : (
@@ -1769,7 +1906,7 @@ export default function WebsiteDevelopmentPage() {
                 </p>
                 <p className="mt-1 text-xs text-[#8B7895]">
                   {statusFilter === "all"
-                    ? `Add the first task for ${clients[selectedClient].label}.`
+                    ? `Add the first task for ${WORKSPACE_CLIENTS[selectedClient].name}.`
                     : "Choose another status or add a new task."}
                 </p>
               </div>
@@ -1783,10 +1920,10 @@ export default function WebsiteDevelopmentPage() {
         </footer>
       </main>
 
-      {addTaskColumn && (
+      {canManage && addTaskColumn && (
         <AddTaskModal
           key={`${selectedClient}-${addTaskColumn}`}
-          clientName={clients[selectedClient].label}
+          clientName={WORKSPACE_CLIENTS[selectedClient].name}
           column={
             columns.find((column) => column.id === addTaskColumn) ?? columns[0]
           }
@@ -1809,8 +1946,24 @@ export default function WebsiteDevelopmentPage() {
             updateTaskStatus(selectedTask.id, "needs_content")
           }
           onDelete={() => deleteTask(selectedTask.id)}
+          canManage={canManage}
+          actorName={teamProfile?.name ?? "Team member"}
         />
       )}
     </div>
+  );
+}
+
+export default function WebsiteDevelopmentPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#FFF9EF] px-5 py-12 text-[#341F60]">
+          <div className="mx-auto h-52 max-w-[1500px] animate-pulse rounded-[24px] border border-[#E3D8EA] bg-white" />
+        </div>
+      }
+    >
+      <WebsiteDevelopmentDashboard />
+    </Suspense>
   );
 }
