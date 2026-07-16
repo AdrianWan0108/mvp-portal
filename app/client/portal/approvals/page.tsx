@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useClientIdentity } from "../_components/ClientIdentity";
 
 type ApprovalStatus =
   | "approval_needed"
@@ -25,13 +26,13 @@ const statusStyles: Record<
 > = {
   approval_needed: {
     label: "Approval needed",
-    className: "border-[#E5C760] bg-[#FFF2BA] text-[#725A00]",
-    dotClassName: "bg-[#D0A323]",
+    className: "border-accent bg-accent/45 text-accent-foreground",
+    dotClassName: "bg-accent",
   },
   revision_in_progress: {
     label: "Revision in progress",
-    className: "border-[#D2BCE0] bg-[#EEE3FA] text-[#5F3378]",
-    dotClassName: "bg-[#7D4698]",
+    className: "border-border bg-muted text-secondary-foreground",
+    dotClassName: "bg-primary",
   },
   up_to_date: {
     label: "Up to date",
@@ -66,7 +67,7 @@ function CategoryIcon({ routeSlug }: { routeSlug: string }) {
   };
 
   return (
-    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-primary">
       <svg
         aria-hidden="true"
         className="size-5"
@@ -101,6 +102,7 @@ function ArrowIcon() {
 }
 
 export default function ApprovalsPage() {
+  const { clientSlug, clientName } = useClientIdentity();
   const [categories, setCategories] = useState<ApprovalCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -110,17 +112,24 @@ export default function ApprovalsPage() {
 
     async function loadCategories() {
       setIsLoading(true);
+      setCategories([]);
+
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to view approvals.");
+        setIsLoading(false);
+        return;
+      }
 
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id")
-        .eq("slug", "mvp")
+        .eq("slug", clientSlug)
         .single();
 
       if (!isActive) return;
       if (clientError || !client) {
         setErrorMessage(
-          `Could not load the MVP client: ${clientError?.message ?? "Client not found."}`,
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
         );
         setIsLoading(false);
         return;
@@ -150,19 +159,19 @@ export default function ApprovalsPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientName, clientSlug]);
 
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-5xl">
         <header>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-            Client portal · MVP
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            Client portal · {clientName ?? "Client"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             Approvals
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             Review work that needs a decision and track revisions already in
             progress.
           </p>
@@ -171,7 +180,7 @@ export default function ApprovalsPage() {
         {errorMessage && (
           <div
             role="alert"
-            className="mt-7 rounded-2xl border border-[#E4C88F] bg-[#FFF7E6] px-4 py-3 text-sm leading-6 text-[#805A22]"
+            className="mt-7 rounded-2xl border border-accent bg-accent/20 px-4 py-3 text-sm leading-6 text-accent-foreground"
           >
             {errorMessage}
           </div>
@@ -180,32 +189,32 @@ export default function ApprovalsPage() {
         <section className="mt-10" aria-labelledby="approval-categories-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
                 Review queue
               </p>
               <h2
                 id="approval-categories-heading"
-                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
               >
                 Approval categories
               </h2>
             </div>
             {!isLoading && (
-              <span className="rounded-full bg-[#EEE3FA] px-3 py-1.5 text-[11px] font-semibold text-[#5F3378]">
+              <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-secondary-foreground">
                 {categories.length} categories
               </span>
             )}
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[24px] border border-[#E3D8EA] bg-white shadow-[0_8px_28px_rgba(52,31,96,0.055)]">
+          <div className="mt-5 overflow-hidden rounded-[24px] border border-border bg-card shadow-[0_8px_28px_rgba(52,31,96,0.055)]">
             {isLoading ? (
-              <div className="divide-y divide-[#E9E0EF]">
+              <div className="divide-y divide-border">
                 {Array.from({ length: 3 }, (_, index) => (
-                  <div key={index} className="h-28 animate-pulse bg-white" />
+                  <div key={index} className="h-28 animate-pulse bg-card" />
                 ))}
               </div>
             ) : categories.length > 0 ? (
-              <div className="divide-y divide-[#E9E0EF]">
+              <div className="divide-y divide-border">
                 {categories.map((category) => {
                   const status = statusStyles[category.status];
 
@@ -213,16 +222,16 @@ export default function ApprovalsPage() {
                     <Link
                       key={category.id}
                       href={`/client/portal/approvals/${category.route_slug}`}
-                      className="group flex flex-col gap-4 px-5 py-5 transition hover:bg-[#FFFDF8] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#7D4698] sm:flex-row sm:items-center sm:px-6"
+                      className="group flex flex-col gap-4 px-5 py-5 transition hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring sm:flex-row sm:items-center sm:px-6"
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-4">
                         <CategoryIcon routeSlug={category.route_slug} />
                         <div className="min-w-0">
-                          <h3 className="text-base font-semibold text-[#341F60]">
+                          <h3 className="text-base font-semibold text-foreground">
                             {category.name}
                           </h3>
                           {category.description && (
-                            <p className="mt-1 text-sm leading-6 text-[#75647F]">
+                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
                               {category.description}
                             </p>
                           )}
@@ -238,7 +247,7 @@ export default function ApprovalsPage() {
                           />
                           {status.label}
                         </span>
-                        <span className="text-[#A48BAD] transition group-hover:translate-x-0.5 group-hover:text-[#7D4698]">
+                        <span className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary">
                           <ArrowIcon />
                         </span>
                       </div>
@@ -247,8 +256,9 @@ export default function ApprovalsPage() {
                 })}
               </div>
             ) : (
-              <p className="px-6 py-12 text-center text-sm text-[#75647F]">
-                No approval categories are available yet.
+              <p className="px-6 py-12 text-center text-sm text-muted-foreground">
+                No approvals yet. New approval categories will appear here
+                when they are ready.
               </p>
             )}
           </div>

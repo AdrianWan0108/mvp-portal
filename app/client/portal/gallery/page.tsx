@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useClientIdentity } from "../_components/ClientIdentity";
 
 type GalleryBook = {
   id: string;
@@ -14,18 +15,18 @@ type GalleryBook = {
 
 const coverStyles = [
   {
-    cover: "bg-[#7D4698] text-white",
-    spine: "bg-[#67377E]",
-    detail: "border-white/25 text-white/70",
+    cover: "bg-primary text-primary-foreground",
+    spine: "bg-primary/90",
+    detail: "border-current/25 text-current/70",
   },
   {
-    cover: "bg-[#EEE3FA] text-[#341F60]",
-    spine: "bg-[#D7C1E7]",
-    detail: "border-[#7D4698]/20 text-[#695677]",
+    cover: "bg-muted text-foreground",
+    spine: "bg-secondary",
+    detail: "border-primary/20 text-muted-foreground",
   },
   {
-    cover: "bg-[#341F60] text-white",
-    spine: "bg-[#251548]",
+    cover: "bg-foreground text-white",
+    spine: "bg-foreground/85",
     detail: "border-white/20 text-white/65",
   },
 ];
@@ -48,6 +49,7 @@ function ArrowIcon() {
 }
 
 export default function GalleryPage() {
+  const { clientSlug, clientName } = useClientIdentity();
   const [books, setBooks] = useState<GalleryBook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -57,17 +59,24 @@ export default function GalleryPage() {
 
     async function loadBooks() {
       setIsLoading(true);
+      setBooks([]);
+
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to view the gallery.");
+        setIsLoading(false);
+        return;
+      }
 
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id")
-        .eq("slug", "mvp")
+        .eq("slug", clientSlug)
         .single();
 
       if (!isActive) return;
       if (clientError || !client) {
         setErrorMessage(
-          `Could not load the MVP client: ${clientError?.message ?? "Client not found."}`,
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
         );
         setIsLoading(false);
         return;
@@ -95,19 +104,19 @@ export default function GalleryPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientName, clientSlug]);
 
   return (
     <main className="min-h-screen overflow-hidden px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <header>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-            Client portal · MVP
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            Client portal · {clientName ?? "Client"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             Gallery
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             Browse project photography and event moments by album.
           </p>
         </header>
@@ -115,7 +124,7 @@ export default function GalleryPage() {
         {errorMessage && (
           <div
             role="alert"
-            className="mt-7 rounded-2xl border border-[#E4C88F] bg-[#FFF7E6] px-4 py-3 text-sm leading-6 text-[#805A22]"
+            className="mt-7 rounded-2xl border border-accent bg-accent/20 px-4 py-3 text-sm leading-6 text-accent-foreground"
           >
             {errorMessage}
           </div>
@@ -124,31 +133,31 @@ export default function GalleryPage() {
         <section className="mt-10" aria-labelledby="gallery-books-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
                 Photo library
               </p>
               <h2
                 id="gallery-books-heading"
-                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
               >
                 Albums
               </h2>
             </div>
             {!isLoading && (
-              <span className="rounded-full bg-[#EEE3FA] px-3 py-1.5 text-[11px] font-semibold text-[#5F3378]">
+              <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-secondary-foreground">
                 {books.length} books
               </span>
             )}
           </div>
 
           <div className="relative mt-6">
-            <div className="overflow-x-auto pb-8 pt-2 [scrollbar-color:#CDB4DB_transparent] [scrollbar-width:thin]">
+            <div className="overflow-x-auto pb-8 pt-2 [scrollbar-color:var(--input)_transparent] [scrollbar-width:thin]">
               <div className="flex min-w-max items-end gap-3 px-1 sm:gap-4">
                 {isLoading
                   ? Array.from({ length: 3 }, (_, index) => (
                       <div
                         key={index}
-                        className="aspect-[2/3] w-40 animate-pulse rounded-r-xl rounded-l-sm border border-[#E3D8EA] bg-white sm:w-44"
+                        className="aspect-[2/3] w-40 animate-pulse rounded-r-xl rounded-l-sm border border-border bg-card sm:w-44"
                       />
                     ))
                   : books.map((book, index) => {
@@ -159,7 +168,7 @@ export default function GalleryPage() {
                           key={book.id}
                           href={`/client/portal/gallery/${book.id}`}
                           aria-label={`Open ${book.title} album`}
-                          className={`group relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-r-xl rounded-l-sm border border-[#341F60]/10 shadow-[8px_10px_24px_rgba(52,31,96,0.12)] transition duration-300 hover:-translate-y-2 hover:shadow-[10px_18px_32px_rgba(52,31,96,0.18)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7D4698] sm:w-44 ${style.cover}`}
+                          className={`group relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-r-xl rounded-l-sm border border-foreground/10 shadow-[8px_10px_24px_rgba(52,31,96,0.12)] transition duration-300 hover:-translate-y-2 hover:shadow-[10px_18px_32px_rgba(52,31,96,0.18)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:w-44 ${style.cover}`}
                         >
                           <span
                             className={`absolute inset-y-0 left-0 w-8 border-r border-black/10 shadow-[4px_0_10px_rgba(0,0,0,0.08)] ${style.spine}`}
@@ -172,11 +181,11 @@ export default function GalleryPage() {
                                 transform: "rotate(180deg)",
                               }}
                             >
-                              MVP gallery
+                              {clientName ?? "Client"} gallery
                             </span>
                           </span>
 
-                          <span className="absolute inset-x-0 top-0 h-px bg-white/35" />
+                          <span className="absolute inset-x-0 top-0 h-px bg-card/35" />
                           <span className="absolute bottom-0 right-0 top-0 w-px bg-black/10" />
 
                           <span className="flex h-full flex-col justify-between py-6 pl-12 pr-5">
@@ -201,15 +210,15 @@ export default function GalleryPage() {
               </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-5 h-3 rounded-full bg-[linear-gradient(180deg,#E2D2E9_0%,#CBB7D4_45%,#A98AB8_46%,#EADFF0_100%)] shadow-[0_7px_14px_rgba(52,31,96,0.12)]" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-5 h-3 rounded-full bg-[linear-gradient(180deg,var(--muted)_0%,var(--secondary)_45%,var(--primary)_46%,var(--border)_100%)] shadow-[0_7px_14px_rgba(52,31,96,0.12)]" />
           </div>
 
           {!isLoading && books.length === 0 && !errorMessage && (
-            <div className="mt-6 rounded-[24px] border border-dashed border-[#D8C6E4] bg-white px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-[#341F60]">
+            <div className="mt-6 rounded-[24px] border border-dashed border-border bg-card px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-foreground">
                 No gallery books yet.
               </p>
-              <p className="mt-1 text-xs text-[#75647F]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 New albums will appear here when they are ready.
               </p>
             </div>

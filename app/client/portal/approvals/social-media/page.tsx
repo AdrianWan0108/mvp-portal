@@ -240,8 +240,8 @@ const reviewStyles: Record<ReviewStatus, { label: string; shortLabel: string; pi
   approved: {
     label: "Approved",
     shortLabel: "Approved",
-    pill: "bg-[var(--brand-100)] text-[var(--brand-800)]",
-    dot: "bg-[var(--brand-700)]",
+    pill: "bg-[var(--muted)] text-[var(--muted-foreground)]",
+    dot: "bg-[var(--primary)]",
   },
   pending: {
     label: "Not yet reviewed",
@@ -286,7 +286,7 @@ function StatusIcon({ status, className = "h-4 w-4" }: { status: ReviewStatus; c
   if (status === "approved") {
     return (
       <svg viewBox="0 0 20 20" fill="none" className={className} aria-hidden="true">
-        <circle cx="10" cy="10" r="8" fill="var(--brand-700)" />
+        <circle cx="10" cy="10" r="8" fill="var(--primary)" />
         <path d="m6.5 10.2 2.2 2.1 4.8-5" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
@@ -362,7 +362,9 @@ function PersonStatus({ personId, review: personReview, compact = false }: { per
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function SocialMediaApprovalsPage() {
-  const { identity: currentUser } = useClientIdentity();
+  const { identity, clientSlug, clientName } = useClientIdentity();
+  const currentUser: PersonId | null =
+    identity === "gary" || identity === "dorothy" ? identity : null;
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isRequestingChanges, setIsRequestingChanges] = useState(false);
@@ -449,13 +451,37 @@ export default function SocialMediaApprovalsPage() {
     setActionFeedback(`${PEOPLE[currentUser].name}’s change request was recorded at ${timestamp}.`);
   }
 
+  if (clientSlug !== "mvp") {
+    return (
+      <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
+        <div className="mx-auto max-w-4xl">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            Client portal · {clientName ?? "Client"}
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
+            Social media approvals
+          </h1>
+          <section className="mt-10 rounded-[24px] border border-dashed border-border bg-card px-6 py-14 text-center">
+            <p className="text-sm font-semibold text-foreground">
+              No social media approvals yet.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Content awaiting review for {clientName ?? "this client"} will
+              appear here.
+            </p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       {currentUser && (
         <main className="mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 sm:py-14 lg:px-10">
           <header className="mb-10 border-b border-[var(--border)] pb-8">
             <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--brand-700)]">Content approvals</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">Content approvals</p>
               <h1 className={`${fraunces.className} text-4xl font-medium leading-tight tracking-tight sm:text-5xl`}>
                 July social calendar
               </h1>
@@ -467,9 +493,9 @@ export default function SocialMediaApprovalsPage() {
             {[
               { count: awaitingCount, label: "Awaiting one or both", detail: "At least one review is missing", color: "text-[#9A773F]", dot: "bg-[#9A773F]" },
               { count: changesCount, label: "Changes requested", detail: "Blocked until revisions are reviewed", color: "text-[#A15E4C]", dot: "bg-[#A15E4C]" },
-              { count: approvedCount, label: "Fully approved", detail: "Gary and Dorothy both approved", color: "text-[var(--brand-700)]", dot: "bg-[var(--brand-700)]" },
+              { count: approvedCount, label: "Fully approved", detail: "Gary and Dorothy both approved", color: "text-[var(--primary)]", dot: "bg-[var(--primary)]" },
             ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[0_4px_18px_rgba(49,75,62,0.025)] sm:p-6">
+              <div key={item.label} className="rounded-2xl border border-[var(--border)] bg-card p-5 shadow-[0_4px_18px_rgba(49,75,62,0.025)] sm:p-6">
                 <div className="flex items-end justify-between gap-4">
                   <p className={`${fraunces.className} text-4xl font-medium ${item.color}`}>{item.count}</p>
                   <span className={`mb-2 h-2 w-2 rounded-full ${item.dot}`} />
@@ -496,9 +522,9 @@ export default function SocialMediaApprovalsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-[0_4px_18px_rgba(49,75,62,0.025)]">
+            <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-card shadow-[0_4px_18px_rgba(49,75,62,0.025)]">
               <div className="min-w-[1260px]">
-                <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--brand-50)]">
+                <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--background)]">
                   {WEEKDAY_LABELS.map((label) => (
                     <div key={label} className="px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--foreground)]/40">
                       {label}
@@ -513,11 +539,11 @@ export default function SocialMediaApprovalsPage() {
                     const dateString = `${YEAR}-${String(MONTH_INDEX + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                     const post = postsByDate.get(dateString);
                     return (
-                      <div key={dateString} className="relative min-h-32 bg-white p-2.5">
+                      <div key={dateString} className="relative min-h-32 bg-card p-2.5">
                         <span className="text-[11px] font-medium text-[var(--foreground)]/40">{day}</span>
                         {post?.isPosted && (
-                          <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 -rotate-12 items-center justify-center rounded-full border-[3px] border-[#7651A6] bg-transparent p-1.5 text-center shadow-[0_5px_16px_rgba(90,54,137,0.18)]">
-                            <span className="flex h-full w-full items-center justify-center rounded-full border-2 border-dashed border-[#7651A6] text-[8px] font-black uppercase tracking-[0.12em] text-[#5A3689]">
+                          <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 -rotate-12 items-center justify-center rounded-full border-[3px] border-primary bg-transparent p-1.5 text-center shadow-[0_5px_16px_rgba(90,54,137,0.18)]">
+                            <span className="flex h-full w-full items-center justify-center rounded-full border-2 border-dashed border-primary text-[8px] font-black uppercase tracking-[0.12em] text-primary">
                               Posted
                             </span>
                           </span>
@@ -527,7 +553,7 @@ export default function SocialMediaApprovalsPage() {
                             type="button"
                             onClick={() => openPost(post.id)}
                             aria-label={`Review ${post.postType} scheduled for ${formatPostDate(post.date)}`}
-                            className={`mt-1.5 block w-full rounded-xl border border-[var(--border)] bg-[var(--brand-50)] p-2 text-left transition hover:border-[var(--brand-700)]/35 hover:bg-[var(--brand-100)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)] ${post.isPosted ? "opacity-50" : "opacity-100"}`}
+                            className={`mt-1.5 block w-full rounded-xl border border-[var(--border)] bg-[var(--background)] p-2 text-left transition hover:border-[var(--primary)]/35 hover:bg-[var(--muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${post.isPosted ? "opacity-50" : "opacity-100"}`}
                           >
                             <span className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold text-[var(--foreground)]/55">
                               <PostTypeIcon type={post.postType} className="h-3.5 w-3.5" />
@@ -539,7 +565,7 @@ export default function SocialMediaApprovalsPage() {
                               </span>
                             )}
                             {post.media?.[0] && (
-                              <span className="relative mb-2 block h-20 overflow-hidden rounded-lg bg-[var(--brand-200)]">
+                              <span className="relative mb-2 block h-20 overflow-hidden rounded-lg bg-[var(--secondary)]">
                                 <Image
                                   src={post.media[0].src}
                                   alt=""
@@ -567,7 +593,7 @@ export default function SocialMediaApprovalsPage() {
                                   className="object-cover"
                                 />
                                 <span className="absolute inset-0 flex items-center justify-center bg-black/10">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-[var(--foreground)] shadow-sm">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-card/90 text-[var(--foreground)] shadow-sm">
                                     <svg viewBox="0 0 12 12" className="ml-px h-2.5 w-2.5" fill="currentColor" aria-hidden="true">
                                       <path d="M3 1.8v8.4L10 6 3 1.8Z" />
                                     </svg>
@@ -593,7 +619,7 @@ export default function SocialMediaApprovalsPage() {
 
           <section aria-labelledby="register-heading" className="mt-14">
             <div className="mb-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand-700)]">Approval register</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">Approval register</p>
               <h2 id="register-heading" className={`${fraunces.className} mt-1 text-3xl font-medium`}>Every post, every decision</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--foreground)]/55">Open a card to review the creative, leave a change request, or record your approval. A post is cleared only when both people approve.</p>
             </div>
@@ -606,7 +632,7 @@ export default function SocialMediaApprovalsPage() {
                     key={post.id}
                     type="button"
                     onClick={() => openPost(post.id)}
-                    className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white text-left shadow-[0_4px_18px_rgba(49,75,62,0.025)] transition hover:-translate-y-0.5 hover:border-[var(--brand-300)] hover:shadow-[0_12px_28px_rgba(49,75,62,0.07)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)]"
+                    className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-left shadow-[0_4px_18px_rgba(49,75,62,0.025)] transition hover:-translate-y-0.5 hover:border-[var(--input)] hover:shadow-[0_12px_28px_rgba(49,75,62,0.07)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                   >
                     <div className="flex">
                       <div className="relative w-24 shrink-0 overflow-hidden sm:w-32" style={{ backgroundColor: post.content }}>
@@ -679,7 +705,7 @@ export default function SocialMediaApprovalsPage() {
               type="button"
               onClick={closeModal}
               aria-label="Close"
-              className="absolute right-4 top-4 z-10 rounded-full bg-white/85 p-2 text-[var(--foreground)]/55 shadow-sm backdrop-blur transition hover:bg-white hover:text-[var(--foreground)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)]"
+              className="absolute right-4 top-4 z-10 rounded-full bg-card/85 p-2 text-[var(--foreground)]/55 shadow-sm backdrop-blur transition hover:bg-card hover:text-[var(--foreground)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
                 <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -687,10 +713,10 @@ export default function SocialMediaApprovalsPage() {
             </button>
 
             <div className="grid md:grid-cols-[1fr_1fr]">
-              <div className="bg-[var(--brand-100)] p-4 sm:p-5">
+              <div className="bg-[var(--muted)] p-4 sm:p-5">
                 {selectedPost.media?.length ? (
                   <>
-                    <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-white shadow-sm">
+                    <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-card shadow-sm">
                       <Image
                         src={selectedPost.media[selectedMediaIndex].src}
                         alt={selectedPost.media[selectedMediaIndex].alt}
@@ -711,9 +737,9 @@ export default function SocialMediaApprovalsPage() {
                           onClick={() => setSelectedMediaIndex(index)}
                           aria-label={`View ${asset.label}`}
                           aria-pressed={selectedMediaIndex === index}
-                          className={`flex items-center gap-2 rounded-xl border bg-white p-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)] ${selectedMediaIndex === index ? "border-[var(--brand-700)] shadow-sm" : "border-transparent opacity-65 hover:opacity-100"}`}
+                          className={`flex items-center gap-2 rounded-xl border bg-card p-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${selectedMediaIndex === index ? "border-[var(--primary)] shadow-sm" : "border-transparent opacity-65 hover:opacity-100"}`}
                         >
-                          <span className="relative h-12 w-10 shrink-0 overflow-hidden rounded-md bg-[var(--brand-200)]">
+                          <span className="relative h-12 w-10 shrink-0 overflow-hidden rounded-md bg-[var(--secondary)]">
                             <Image src={asset.src} alt="" fill sizes="40px" placeholder="blur" className="object-cover" />
                           </span>
                           <span>
@@ -737,7 +763,7 @@ export default function SocialMediaApprovalsPage() {
                       <source src={selectedPost.video.src} type="video/mp4" />
                       Your browser does not support embedded video playback.
                     </video>
-                    <div className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2.5">
+                    <div className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-card px-3 py-2.5">
                       <span className="flex items-center gap-2 text-[10px] font-semibold text-[var(--foreground)]/70">
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--foreground)] text-white">
                           <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="currentColor" aria-hidden="true">
@@ -779,12 +805,12 @@ export default function SocialMediaApprovalsPage() {
                       const person = PEOPLE[personId];
                       const personReview = selectedPost.approvals[personId];
                       return (
-                        <div key={personId} className={`rounded-xl border p-4 ${personId === currentUser ? "border-[var(--brand-700)]/35 bg-[var(--brand-100)]" : "border-[var(--border)] bg-white"}`}>
+                        <div key={personId} className={`rounded-xl border p-4 ${personId === currentUser ? "border-[var(--primary)]/35 bg-[var(--muted)]" : "border-[var(--border)] bg-card"}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3">
                               <span className={`${fraunces.className} flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-sm font-semibold text-[var(--foreground)]/65`}>{person.initials}</span>
                               <div>
-                                <p className="text-sm font-semibold text-[var(--foreground)]">{person.name} {personId === currentUser && <span className="font-normal text-[var(--brand-700)]">(you)</span>}</p>
+                                <p className="text-sm font-semibold text-[var(--foreground)]">{person.name} {personId === currentUser && <span className="font-normal text-[var(--primary)]">(you)</span>}</p>
                                 <p className="mt-0.5 text-[11px] text-[var(--foreground)]/45">{person.role}</p>
                               </div>
                             </div>
@@ -808,7 +834,7 @@ export default function SocialMediaApprovalsPage() {
                 </div>
 
                 {actionFeedback && (
-                  <div role="status" className="mt-4 flex items-start gap-2 rounded-xl bg-[var(--brand-100)] px-3.5 py-3 text-xs leading-5 text-[var(--brand-800)]">
+                  <div role="status" className="mt-4 flex items-start gap-2 rounded-xl bg-[var(--muted)] px-3.5 py-3 text-xs leading-5 text-[var(--muted-foreground)]">
                     <StatusIcon status="approved" className="mt-0.5 h-4 w-4 shrink-0" />
                     {actionFeedback}
                   </div>
@@ -823,7 +849,7 @@ export default function SocialMediaApprovalsPage() {
                       type="button"
                       onClick={() => approvePost(selectedPost.id)}
                       disabled={selectedPost.approvals[currentUser].status === "approved"}
-                      className="rounded-full bg-[var(--foreground)] px-5 py-2.5 text-sm font-semibold text-[var(--background)] transition hover:bg-[var(--brand-800)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)] focus-visible:ring-offset-2"
+                      className="rounded-full bg-[var(--foreground)] px-5 py-2.5 text-sm font-semibold text-[var(--background)] transition hover:bg-[var(--muted-foreground)] disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2"
                     >
                       {selectedPost.approvals[currentUser].status === "changes" ? "Approve revised post" : selectedPost.approvals[currentUser].status === "approved" ? "You approved this" : "Approve as me"}
                     </button>
@@ -833,7 +859,7 @@ export default function SocialMediaApprovalsPage() {
                         setIsRequestingChanges((value) => !value);
                         setActionFeedback("");
                       }}
-                      className="rounded-full border border-[var(--border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--foreground)]/70 transition hover:bg-[var(--foreground)]/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-700)]"
+                      className="rounded-full border border-[var(--border)] bg-card px-5 py-2.5 text-sm font-semibold text-[var(--foreground)]/70 transition hover:bg-[var(--foreground)]/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                     >
                       Request changes
                     </button>
@@ -850,7 +876,7 @@ export default function SocialMediaApprovalsPage() {
                         rows={4}
                         autoFocus
                         placeholder="Example: Replace slide 2 with the reformer photo and remove the final sentence from the caption."
-                        className="mt-3 w-full resize-none rounded-xl border border-[var(--border)] bg-white p-3 text-sm leading-5 text-[var(--foreground)] placeholder:text-[var(--foreground)]/35 focus:outline-none focus:ring-2 focus:ring-[#B16954]/30"
+                        className="mt-3 w-full resize-none rounded-xl border border-[var(--border)] bg-card p-3 text-sm leading-5 text-[var(--foreground)] placeholder:text-[var(--foreground)]/35 focus:outline-none focus:ring-2 focus:ring-[#B16954]/30"
                       />
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <span className="text-[10px] text-[var(--foreground)]/35">Recorded under {PEOPLE[currentUser].name}</span>

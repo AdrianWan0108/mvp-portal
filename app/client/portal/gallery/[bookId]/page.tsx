@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useClientIdentity } from "../../_components/ClientIdentity";
 
 type GalleryBook = {
   id: string;
@@ -71,9 +72,9 @@ function PhotoPreview({
   const aspectClass = photoAspectClasses[index % photoAspectClasses.length];
 
   return (
-    <figure className="mb-4 break-inside-avoid overflow-hidden rounded-[20px] border border-[#E3D8EA] bg-white shadow-[0_7px_24px_rgba(52,31,96,0.065)]">
+    <figure className="mb-4 break-inside-avoid overflow-hidden rounded-[20px] border border-border bg-card shadow-[0_7px_24px_rgba(52,31,96,0.065)]">
       <div
-        className={`relative overflow-hidden bg-[linear-gradient(135deg,#EEE3FA,#FFF9EF)] ${aspectClass}`}
+        className={`relative overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))] ${aspectClass}`}
       >
         {previewUrl && !hasFailed ? (
           <img
@@ -85,7 +86,7 @@ function PhotoPreview({
         ) : (
           <div className="flex size-full items-center justify-center px-6 text-center">
             <div>
-              <span className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-white/80 text-[#7D4698] shadow-sm">
+              <span className="mx-auto flex size-10 items-center justify-center rounded-2xl bg-card/80 text-primary shadow-sm">
                 <svg
                   aria-hidden="true"
                   className="size-5"
@@ -101,7 +102,7 @@ function PhotoPreview({
                   <path d="m4 17 5-5 3.5 3.5 2-2L20 19" />
                 </svg>
               </span>
-              <p className="mt-3 text-xs leading-5 text-[#75647F]">
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
                 Photo preview unavailable
               </p>
             </div>
@@ -110,7 +111,7 @@ function PhotoPreview({
       </div>
 
       {photo.caption && (
-        <figcaption className="px-4 py-3.5 text-sm leading-6 text-[#695677]">
+        <figcaption className="px-4 py-3.5 text-sm leading-6 text-muted-foreground">
           {photo.caption}
         </figcaption>
       )}
@@ -137,6 +138,7 @@ function BackIcon() {
 
 export default function GalleryAlbumPage() {
   const { bookId } = useParams<{ bookId: string }>();
+  const { clientSlug, clientName } = useClientIdentity();
   const [book, setBook] = useState<GalleryBook | null>(null);
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,32 +149,58 @@ export default function GalleryAlbumPage() {
 
     async function loadAlbum() {
       setIsLoading(true);
+      setBook(null);
+      setPhotos([]);
 
-      const [bookResult, photoResult] = await Promise.all([
-        supabase
-          .from("gallery_books")
-          .select("id, client_id, title, cover_note, created_at")
-          .eq("id", bookId)
-          .single(),
-        supabase
-          .from("gallery_photos")
-          .select(
-            "id, book_id, drive_link, caption, sort_order, created_at",
-          )
-          .eq("book_id", bookId)
-          .order("sort_order", { ascending: true })
-          .order("created_at", { ascending: true }),
-      ]);
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to view this album.");
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("slug", clientSlug)
+        .single();
+
+      if (!isActive) return;
+      if (clientError || !client) {
+        setErrorMessage(
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const bookResult = await supabase
+        .from("gallery_books")
+        .select("id, client_id, title, cover_note, created_at")
+        .eq("id", bookId)
+        .eq("client_id", client.id)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (bookResult.error || !bookResult.data) {
+        setErrorMessage(
+          bookResult.error
+            ? `Could not load this album: ${bookResult.error.message}`
+            : `This album is not available for ${clientName ?? "the selected client"}.`,
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const photoResult = await supabase
+        .from("gallery_photos")
+        .select("id, book_id, drive_link, caption, sort_order, created_at")
+        .eq("book_id", bookResult.data.id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
 
       if (!isActive) return;
 
-      if (bookResult.error || !bookResult.data) {
-        setErrorMessage(
-          `Could not load this album: ${bookResult.error?.message ?? "Album not found."}`,
-        );
-        setBook(null);
-        setPhotos([]);
-      } else if (photoResult.error) {
+      if (photoResult.error) {
         setErrorMessage(`Could not load photos: ${photoResult.error.message}`);
         setBook(bookResult.data as GalleryBook);
         setPhotos([]);
@@ -189,14 +217,14 @@ export default function GalleryAlbumPage() {
     return () => {
       isActive = false;
     };
-  }, [bookId]);
+  }, [bookId, clientName, clientSlug]);
 
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <Link
           href="/client/portal/gallery"
-          className="inline-flex items-center gap-2 rounded-full border border-[#DCCFE4] bg-white px-3.5 py-2 text-xs font-semibold text-[#5F3378] transition hover:border-[#BFA6CE] hover:bg-[#EEE3FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-xs font-semibold text-secondary-foreground transition hover:border-input hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <BackIcon />
           Back to Gallery
@@ -204,14 +232,14 @@ export default function GalleryAlbumPage() {
 
         {isLoading ? (
           <div className="mt-8">
-            <div className="h-10 w-64 animate-pulse rounded-xl bg-[#E9DDF1]" />
-            <div className="mt-3 h-5 w-36 animate-pulse rounded-lg bg-[#EEE3FA]" />
+            <div className="h-10 w-64 animate-pulse rounded-xl bg-muted" />
+            <div className="mt-3 h-5 w-36 animate-pulse rounded-lg bg-muted" />
             <div className="mt-10 columns-1 gap-4 sm:columns-2 lg:columns-3">
               {["h-72", "h-52", "h-80", "h-60", "h-72"].map(
                 (height, index) => (
                   <div
                     key={index}
-                    className={`mb-4 break-inside-avoid animate-pulse rounded-[20px] border border-[#E3D8EA] bg-white ${height}`}
+                    className={`mb-4 break-inside-avoid animate-pulse rounded-[20px] border border-border bg-card ${height}`}
                   />
                 ),
               )}
@@ -219,15 +247,15 @@ export default function GalleryAlbumPage() {
           </div>
         ) : (
           <>
-            <header className="mt-8 border-b border-[#E3D8EA] pb-7">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
+            <header className="mt-8 border-b border-border pb-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
                 Gallery album
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
                 {book?.title ?? "Album unavailable"}
               </h1>
               {book?.cover_note && (
-                <p className="mt-3 text-sm text-[#75647F]">
+                <p className="mt-3 text-sm text-muted-foreground">
                   {book.cover_note}
                 </p>
               )}
@@ -236,7 +264,7 @@ export default function GalleryAlbumPage() {
             {errorMessage && (
               <div
                 role="alert"
-                className="mt-7 rounded-2xl border border-[#E4C88F] bg-[#FFF7E6] px-4 py-3 text-sm leading-6 text-[#805A22]"
+                className="mt-7 rounded-2xl border border-accent bg-accent/20 px-4 py-3 text-sm leading-6 text-accent-foreground"
               >
                 {errorMessage}
               </div>
@@ -254,8 +282,8 @@ export default function GalleryAlbumPage() {
             ) : (
               book &&
               !errorMessage && (
-                <section className="mt-8 rounded-[28px] border border-dashed border-[#D8C6E4] bg-white px-6 py-16 text-center shadow-[0_8px_28px_rgba(52,31,96,0.035)]">
-                  <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+                <section className="mt-8 rounded-[28px] border border-dashed border-border bg-card px-6 py-16 text-center shadow-[0_8px_28px_rgba(52,31,96,0.035)]">
+                  <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-muted text-primary">
                     <svg
                       aria-hidden="true"
                       className="size-6"
@@ -270,10 +298,10 @@ export default function GalleryAlbumPage() {
                       <path d="m8 15 2.5-2.5 2 2 1.5-1.5 2 2" />
                     </svg>
                   </span>
-                  <h2 className="mt-5 text-xl font-semibold text-[#341F60]">
+                  <h2 className="mt-5 text-xl font-semibold text-foreground">
                     No photos in this album yet.
                   </h2>
-                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#75647F]">
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
                     Photos added to this book will appear here automatically.
                   </p>
                 </section>

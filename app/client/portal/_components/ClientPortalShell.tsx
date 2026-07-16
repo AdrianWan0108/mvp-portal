@@ -7,7 +7,9 @@ import { useState } from "react";
 import understoryLogo from "@/public/under story logo-purple.png";
 import {
   CLIENT_IDENTITIES,
+  VALID_CLIENT_USERNAMES,
   ClientIdentityProvider,
+  type ClientAccessLevel,
   type ClientIdentity,
   useClientIdentity,
 } from "./ClientIdentity";
@@ -25,7 +27,7 @@ const navigation: Array<{
   href: string;
   label: string;
   icon: NavIcon;
-  garyOnly?: boolean;
+  ownerOnly?: boolean;
 }> = [
   {
     href: "/client/portal/dashboard",
@@ -51,13 +53,13 @@ const navigation: Array<{
     href: "/client/portal/invoices",
     label: "Invoices",
     icon: "invoices",
-    garyOnly: true,
+    ownerOnly: true,
   },
   {
     href: "/client/portal/documents",
     label: "Documents",
     icon: "documents",
-    garyOnly: true,
+    ownerOnly: true,
   },
   {
     href: "/client/portal/assets",
@@ -149,13 +151,13 @@ function Brand() {
           className="size-10 rounded-xl"
           priority
         />
-        <span className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-white bg-[#F4CE45]" />
+        <span className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-white bg-accent" />
       </span>
       <span>
-        <span className="block text-sm font-semibold tracking-wide text-[#341F60]">
+        <span className="block text-sm font-semibold tracking-wide text-foreground">
           Understory
         </span>
-        <span className="block text-[9px] uppercase tracking-[0.22em] text-[#7D4698]">
+        <span className="block text-[9px] uppercase tracking-[0.22em] text-primary">
           Client portal
         </span>
       </span>
@@ -165,15 +167,15 @@ function Brand() {
 
 function PortalNavigation({
   pathname,
-  identity,
+  accessLevel,
   onNavigate,
 }: {
   pathname: string;
-  identity: ClientIdentity;
+  accessLevel: ClientAccessLevel;
   onNavigate?: () => void;
 }) {
   const visibleNavigation = navigation.filter(
-    (item) => identity === "gary" || !item.garyOnly,
+    (item) => accessLevel === "owner" || !item.ownerOnly,
   );
 
   return (
@@ -188,16 +190,16 @@ function PortalNavigation({
             href={item.href}
             onClick={onNavigate}
             aria-current={isActive ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698] ${
+            className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
               isActive
-                ? "bg-[#7D4698] text-white shadow-[0_8px_24px_rgba(52,31,96,0.16)]"
-                : "text-[#695677] hover:bg-[#EEE3FA] hover:text-[#341F60]"
+                ? "bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(52,31,96,0.16)]"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             <PortalIcon
               name={item.icon}
               className={`size-4.5 shrink-0 ${
-                isActive ? "text-[#F4CE45]" : "text-[#7D4698]"
+                isActive ? "text-accent" : "text-primary"
               }`}
             />
             {item.label}
@@ -213,8 +215,36 @@ function IdentityPicker({
 }: {
   onChoose: (identity: ClientIdentity) => void;
 }) {
+  const [username, setUsername] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  function submitUsername(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedUsername = username.trim().toLocaleLowerCase();
+    const matchedUsername = VALID_CLIENT_USERNAMES.find(
+      (validUsername) =>
+        validUsername.toLocaleLowerCase() === normalizedUsername,
+    );
+    const matchedIdentity = (
+      Object.keys(CLIENT_IDENTITIES) as ClientIdentity[]
+    ).find(
+      (identity) =>
+        CLIENT_IDENTITIES[identity].username === matchedUsername,
+    );
+
+    if (!matchedIdentity) {
+      setErrorMessage(
+        "That username isn't recognized. Check with your Understory contact.",
+      );
+      return;
+    }
+
+    setErrorMessage(null);
+    onChoose(matchedIdentity);
+  }
+
   return (
-    <div className="client-portal-theme fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[#EEE3FA] px-5 py-8 text-[#341F60]">
+    <div className="client-portal-theme fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-muted px-5 py-8 text-foreground">
       <div
         className="pointer-events-none absolute inset-0 overflow-hidden"
         aria-hidden="true"
@@ -228,9 +258,9 @@ function IdentityPicker({
         aria-modal="true"
         aria-labelledby="portal-identity-title"
         aria-describedby="portal-identity-description"
-        className="relative w-full max-w-2xl rounded-[28px] border border-white/80 bg-white p-6 shadow-[0_28px_90px_rgba(52,31,96,0.16)] sm:p-10"
+        className="relative w-full max-w-xl rounded-[28px] border border-white/80 bg-card p-6 shadow-[0_28px_90px_rgba(52,31,96,0.16)] sm:p-10"
       >
-        <div className="mx-auto mb-7 flex size-12 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+        <div className="mx-auto mb-7 flex size-12 items-center justify-center rounded-2xl bg-muted text-primary">
           <svg
             aria-hidden="true"
             className="size-5"
@@ -246,70 +276,77 @@ function IdentityPicker({
         </div>
 
         <div className="text-center">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7D4698]">
-            Motion Vitality Pilates
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">
+            Understory client portal
           </p>
           <h1
             id="portal-identity-title"
-            className="text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl"
+            className="text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl"
           >
             Who is reviewing today?
           </h1>
           <p
             id="portal-identity-description"
-            className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#75647F] sm:text-base"
+            className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground sm:text-base"
           >
-            Choose your identity before entering the portal. Your selection
-            stays active while this browser tab is open.
+            Enter the username provided by Understory. Your selection stays
+            active while this browser tab is open.
           </p>
         </div>
 
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          {(Object.keys(CLIENT_IDENTITIES) as ClientIdentity[]).map(
-            (identity) => {
-              const person = CLIENT_IDENTITIES[identity];
+        <form onSubmit={submitUsername} className="mt-8">
+          <label
+            htmlFor="portal-username"
+            className="block text-xs font-semibold text-foreground"
+          >
+            Username
+          </label>
+          <input
+            id="portal-username"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              if (errorMessage) setErrorMessage(null);
+            }}
+            placeholder="Enter your username"
+            aria-invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? "portal-username-error" : undefined}
+            className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+            autoFocus
+          />
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            Usernames are not case-sensitive. Valid access is provided by your
+            Understory contact.
+          </p>
 
-              return (
-                <button
-                  key={identity}
-                  type="button"
-                  onClick={() => onChoose(identity)}
-                  className="group flex items-center gap-4 rounded-2xl border border-[#E3D8EA] bg-white p-4 text-left shadow-[0_8px_24px_rgba(52,31,96,0.04)] transition hover:-translate-y-0.5 hover:border-[#7D4698]/45 hover:shadow-[0_12px_28px_rgba(52,31,96,0.09)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
-                >
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[#EEE3FA] text-xl font-semibold text-[#5F3378]">
-                    {person.initials}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-base font-semibold text-[#341F60]">
-                      {person.name}
-                    </span>
-                    <span className="mt-0.5 block text-sm text-[#75647F]">
-                      {person.role}
-                    </span>
-                  </span>
-                  <svg
-                    aria-hidden="true"
-                    className="size-5 text-[#B09CBA] transition group-hover:translate-x-0.5 group-hover:text-[#7D4698]"
-                    fill="none"
-                    viewBox="0 0 20 20"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m7.5 4.5 5 5-5 5" />
-                  </svg>
-                </button>
-              );
-            },
+          {errorMessage && (
+            <p
+              id="portal-username-error"
+              role="alert"
+              className="mt-3 rounded-xl border border-[#E4B9B9] bg-[#FFF0F0] px-4 py-3 text-sm text-[#8B3E3E]"
+            >
+              {errorMessage}
+            </p>
           )}
-        </div>
 
-        <div className="mt-7 flex items-start gap-2.5 rounded-xl bg-[#FFF7D8] px-4 py-3 text-xs leading-5 text-[#725A00]">
-          <span className="mt-0.5 size-2 shrink-0 rounded-full bg-[#D0A323]" />
+          <button
+            type="submit"
+            disabled={!username.trim()}
+            className="mt-5 w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_rgba(52,31,96,0.15)] transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Continue
+          </button>
+        </form>
+
+        <div className="mt-7 flex items-start gap-2.5 rounded-xl bg-accent/30 px-4 py-3 text-xs leading-5 text-accent-foreground">
+          <span className="mt-0.5 size-2 shrink-0 rounded-full bg-accent" />
           <p>
-            Choose your own identity so approvals and change requests are
-            attributed correctly.
+            Your username determines the client workspace and which sections
+            are available to you.
           </p>
         </div>
       </section>
@@ -331,30 +368,30 @@ function IdentityIndicator({
     <button
       type="button"
       onClick={openIdentityPicker}
-      aria-label={`Viewing as ${person.name}. Switch identity.`}
-      className={`group flex items-center rounded-xl border border-[#E3D8EA] bg-[#FFFDF8] text-left transition hover:border-[#CDB4DB] hover:bg-[#EEE3FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698] ${
+      aria-label={`Viewing as ${person.name} for ${person.clientName}. Switch identity.`}
+      className={`group flex items-center rounded-xl border border-border bg-card text-left transition hover:border-input hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
         compact ? "gap-2 px-2.5 py-2" : "w-full gap-2.5 px-3 py-2.5"
       }`}
     >
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7D4698] text-[10px] font-semibold text-white">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
         {person.initials}
       </span>
       {compact ? (
-        <span className="text-[10px] font-semibold text-[#341F60]">
-          {person.name}
+        <span className="text-[10px] font-semibold text-foreground">
+          {person.name} · {person.clientName}
         </span>
       ) : (
         <span className="min-w-0 flex-1">
-          <span className="block text-[9px] uppercase tracking-[0.13em] text-[#8B7895]">
+          <span className="block text-[9px] uppercase tracking-[0.13em] text-muted-foreground">
             Viewing as
           </span>
-          <span className="block truncate text-xs font-semibold text-[#341F60]">
-            {person.name}
+          <span className="block truncate text-xs font-semibold text-foreground">
+            {person.name} · {person.clientName}
           </span>
         </span>
       )}
       {!compact && (
-        <span className="text-[9px] font-semibold text-[#7D4698] group-hover:underline">
+        <span className="text-[9px] font-semibold text-primary group-hover:underline">
           Switch
         </span>
       )}
@@ -366,8 +403,8 @@ function UnavailableSection() {
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-3xl">
-        <section className="rounded-[24px] border border-[#E3D8EA] bg-white p-8 text-center shadow-[0_8px_28px_rgba(52,31,96,0.055)] sm:p-12">
-          <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+        <section className="rounded-[24px] border border-border bg-card p-8 text-center shadow-[0_8px_28px_rgba(52,31,96,0.055)] sm:p-12">
+          <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-muted text-primary">
             <svg
               aria-hidden="true"
               className="size-5"
@@ -382,10 +419,10 @@ function UnavailableSection() {
               <path d="M8 10V7a4 4 0 0 1 8 0v3" />
             </svg>
           </span>
-          <h1 className="mt-5 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]">
+          <h1 className="mt-5 text-2xl font-semibold tracking-[-0.03em] text-foreground">
             This section isn&apos;t available
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#75647F]">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">
             This portal view is not included for the currently selected role.
           </p>
         </section>
@@ -401,27 +438,36 @@ function ClientPortalShellContent({
 }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { identity, isPickerOpen, isReady, selectIdentity } =
-    useClientIdentity();
+  const {
+    identity,
+    clientSlug,
+    accessLevel,
+    isPickerOpen,
+    isReady,
+    selectIdentity,
+  } = useClientIdentity();
 
   if (!isReady) {
-    return <div className="min-h-screen bg-[#EEE3FA]" />;
+    return <div className="client-portal-theme min-h-screen bg-muted" />;
   }
 
-  if (!identity || isPickerOpen) {
+  if (!identity || !clientSlug || !accessLevel || isPickerOpen) {
     return <IdentityPicker onChoose={selectIdentity} />;
   }
 
   const isRestrictedRoute =
-    identity === "dorothy" &&
+    accessLevel !== "owner" &&
     (pathname === "/client/portal/invoices" ||
       pathname.startsWith("/client/portal/invoices/") ||
       pathname === "/client/portal/documents" ||
       pathname.startsWith("/client/portal/documents/"));
 
   return (
-    <div className="client-portal-theme min-h-screen bg-[#FFF9EF] text-[#341F60]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[220px] flex-col border-r border-[#E3D8EA] bg-white px-4 py-5 md:flex">
+    <div
+      data-theme={clientSlug}
+      className="min-h-screen bg-background text-foreground"
+    >
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[220px] flex-col border-r border-border bg-card px-4 py-5 md:flex">
         <div className="px-1">
           <Brand />
         </div>
@@ -429,14 +475,14 @@ function ClientPortalShellContent({
           <IdentityIndicator identity={identity} />
         </div>
         <div className="mt-6 flex-1">
-          <PortalNavigation pathname={pathname} identity={identity} />
+          <PortalNavigation pathname={pathname} accessLevel={accessLevel} />
         </div>
-        <p className="border-t border-[#E9E0EF] px-2 pt-4 text-[10px] leading-4 text-[#8B7895]">
+        <p className="border-t border-border px-2 pt-4 text-[10px] leading-4 text-muted-foreground">
           Understory · Client workspace
         </p>
       </aside>
 
-      <header className="sticky top-0 z-50 border-b border-[#E3D8EA] bg-white/95 px-4 py-3 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-50 border-b border-border bg-card/95 px-4 py-3 backdrop-blur md:hidden">
         <div className="flex items-center justify-between gap-4">
           <Brand />
           <div className="flex items-center gap-2">
@@ -446,7 +492,7 @@ function ClientPortalShellContent({
               aria-expanded={isMobileMenuOpen}
               aria-controls="mobile-client-navigation"
               onClick={() => setIsMobileMenuOpen((current) => !current)}
-              className="flex size-10 items-center justify-center rounded-full border border-[#DED0E7] bg-white text-[#5F3378] transition hover:bg-[#EEE3FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+              className="flex size-10 items-center justify-center rounded-full border border-input bg-card text-secondary-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <PortalIcon
                 name={isMobileMenuOpen ? "close" : "menu"}
@@ -462,11 +508,11 @@ function ClientPortalShellContent({
         {isMobileMenuOpen && (
           <div
             id="mobile-client-navigation"
-            className="absolute inset-x-0 top-full border-b border-[#E3D8EA] bg-white px-4 py-4 shadow-[0_14px_35px_rgba(52,31,96,0.12)]"
+            className="absolute inset-x-0 top-full border-b border-border bg-card px-4 py-4 shadow-[0_14px_35px_rgba(52,31,96,0.12)]"
           >
             <PortalNavigation
               pathname={pathname}
-              identity={identity}
+              accessLevel={accessLevel}
               onNavigate={() => setIsMobileMenuOpen(false)}
             />
           </div>

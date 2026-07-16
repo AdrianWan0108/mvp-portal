@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useClientIdentity } from "../_components/ClientIdentity";
 
 const CATEGORIES = [
   "Contract",
@@ -68,10 +69,10 @@ function DocumentIcon({ sourceType }: { sourceType: DocumentSourceType }) {
     <span
       className={`flex size-12 shrink-0 items-center justify-center rounded-2xl ${
         isSlides
-          ? "bg-[#FFF4C8] text-[#876900]"
+          ? "bg-accent/40 text-accent-foreground"
           : sourceType === "google_doc"
             ? "bg-[#E7EEFF] text-[#34558E]"
-            : "bg-[#EEE3FA] text-[#7D4698]"
+            : "bg-muted text-primary"
       }`}
     >
       <svg
@@ -129,11 +130,11 @@ function GoogleDocumentPreview({ document }: { document: ClientDocument }) {
 
   if (!embedUrl || timedOut) {
     return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[22px] border border-dashed border-[#D8C6E4] bg-[#FFFDF8] px-6 text-center sm:min-h-[520px]">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+      <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[22px] border border-dashed border-border bg-card px-6 text-center sm:min-h-[520px]">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-primary">
           <DocumentIcon sourceType={document.source_type} />
         </span>
-        <p className="mt-5 max-w-lg text-sm font-semibold leading-6 text-[#341F60]">
+        <p className="mt-5 max-w-lg text-sm font-semibold leading-6 text-foreground">
           This document can&apos;t be previewed here — make sure it&apos;s shared
           as &apos;Anyone with the link can view&apos;, or open it directly.
         </p>
@@ -142,7 +143,7 @@ function GoogleDocumentPreview({ document }: { document: ClientDocument }) {
             href={document.google_link}
             target="_blank"
             rel="noreferrer"
-            className="mt-5 rounded-full bg-[#7D4698] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#69377F] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+            className="mt-5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             Open original link
           </a>
@@ -152,9 +153,9 @@ function GoogleDocumentPreview({ document }: { document: ClientDocument }) {
   }
 
   return (
-    <div className="relative min-h-[360px] overflow-hidden rounded-[22px] border border-[#DCCFE4] bg-white sm:min-h-[520px]">
+    <div className="relative min-h-[360px] overflow-hidden rounded-[22px] border border-border bg-card sm:min-h-[520px]">
       {!didLoad && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#FFFDF8] text-sm font-medium text-[#75647F]">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-sm font-medium text-muted-foreground">
           Loading preview…
         </div>
       )}
@@ -177,22 +178,22 @@ function DocumentPreviewModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-[#341F60]/45 px-4 py-6 backdrop-blur-sm sm:px-8"
+      className="fixed inset-0 z-50 overflow-y-auto bg-foreground/45 px-4 py-6 backdrop-blur-sm sm:px-8"
       role="dialog"
       aria-modal="true"
       aria-labelledby="document-preview-title"
     >
-      <div className="mx-auto max-w-6xl rounded-[28px] border border-white/60 bg-[#FFF9EF] p-4 shadow-[0_28px_90px_rgba(52,31,96,0.24)] sm:p-7">
+      <div className="mx-auto max-w-6xl rounded-[28px] border border-white/60 bg-background p-4 shadow-[0_28px_90px_rgba(52,31,96,0.24)] sm:p-7">
         <div className="flex items-start justify-between gap-5 pb-5">
           <div className="flex min-w-0 items-center gap-3">
             <DocumentIcon sourceType={document.source_type} />
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7D4698]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
                 {sourceLabel(document.source_type)} · {document.category}
               </p>
               <h2
                 id="document-preview-title"
-                className="mt-1 truncate text-xl font-semibold text-[#341F60] sm:text-2xl"
+                className="mt-1 truncate text-xl font-semibold text-foreground sm:text-2xl"
               >
                 {document.file_name ?? sourceLabel(document.source_type)}
               </h2>
@@ -202,7 +203,7 @@ function DocumentPreviewModal({
             type="button"
             onClick={onClose}
             aria-label="Close document preview"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[#E3D8EA] bg-white text-[#695677] transition hover:bg-[#EEE3FA] hover:text-[#341F60] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <CloseIcon />
           </button>
@@ -213,10 +214,10 @@ function DocumentPreviewModal({
             <iframe
               src={document.file_url}
               title={`Preview of ${document.file_name ?? "PDF document"}`}
-              className="h-[70vh] min-h-[360px] w-full rounded-[22px] border border-[#DCCFE4] bg-white sm:min-h-[520px] sm:max-h-[720px]"
+              className="h-[70vh] min-h-[360px] w-full rounded-[22px] border border-border bg-card sm:min-h-[520px] sm:max-h-[720px]"
             />
           ) : (
-            <div className="flex min-h-[360px] items-center justify-center rounded-[22px] border border-dashed border-[#D8C6E4] bg-white px-6 text-center text-sm text-[#75647F] sm:min-h-[520px]">
+            <div className="flex min-h-[360px] items-center justify-center rounded-[22px] border border-dashed border-border bg-card px-6 text-center text-sm text-muted-foreground sm:min-h-[520px]">
               This PDF no longer has a file attached.
             </div>
           )
@@ -224,7 +225,7 @@ function DocumentPreviewModal({
           <GoogleDocumentPreview key={document.id} document={document} />
         )}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[#75647F]">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>
             Uploaded by {document.uploaded_by ?? "Client"} ·{" "}
             {formatUploadDate(document.created_at)}
@@ -234,7 +235,7 @@ function DocumentPreviewModal({
               href={document.google_link ?? document.file_url ?? "#"}
               target="_blank"
               rel="noreferrer"
-              className="font-semibold text-[#7D4698] hover:underline"
+              className="font-semibold text-primary hover:underline"
             >
               Open in a new tab ↗
             </a>
@@ -247,6 +248,7 @@ function DocumentPreviewModal({
 
 export default function DocumentsPage() {
   // Document creation belongs in an internal/admin interface, not the client portal.
+  const { clientSlug, clientName } = useClientIdentity();
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All");
   const [selectedDocument, setSelectedDocument] =
@@ -266,17 +268,25 @@ export default function DocumentsPage() {
 
     async function loadDocuments() {
       setIsLoading(true);
+      setDocuments([]);
+      setSelectedDocument(null);
+
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to view documents.");
+        setIsLoading(false);
+        return;
+      }
 
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id")
-        .eq("slug", "mvp")
+        .eq("slug", clientSlug)
         .single();
 
       if (!isActive) return;
       if (clientError || !client) {
         setErrorMessage(
-          `Could not load the MVP client: ${clientError?.message ?? "Client not found."}`,
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
         );
         setIsLoading(false);
         return;
@@ -306,20 +316,20 @@ export default function DocumentsPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientName, clientSlug]);
 
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <header>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-              Client portal · MVP
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+              Client portal · {clientName ?? "Client"}
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
               Documents
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
               Contracts, strategy decks, event briefs, and shared project files.
             </p>
           </div>
@@ -328,7 +338,7 @@ export default function DocumentsPage() {
         {errorMessage && (
           <div
             role="alert"
-            className="mt-6 rounded-2xl border border-[#E4C88F] bg-[#FFF7E6] px-4 py-3 text-sm leading-6 text-[#805A22]"
+            className="mt-6 rounded-2xl border border-accent bg-accent/20 px-4 py-3 text-sm leading-6 text-accent-foreground"
           >
             {errorMessage}
           </div>
@@ -337,12 +347,12 @@ export default function DocumentsPage() {
         <section className="mt-10" aria-labelledby="document-library-heading">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
                 Shared library
               </p>
               <h2
                 id="document-library-heading"
-                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
               >
                 All documents
               </h2>
@@ -354,10 +364,10 @@ export default function DocumentsPage() {
                   type="button"
                   onClick={() => setCategoryFilter(filter)}
                   aria-pressed={categoryFilter === filter}
-                  className={`rounded-full px-3.5 py-2 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698] ${
+                  className={`rounded-full px-3.5 py-2 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                     categoryFilter === filter
-                      ? "bg-[#7D4698] text-white"
-                      : "border border-[#E3D8EA] bg-white text-[#695677] hover:bg-[#EEE3FA]"
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {filter}
@@ -371,41 +381,41 @@ export default function DocumentsPage() {
               ? Array.from({ length: 3 }, (_, index) => (
                   <div
                     key={index}
-                    className="h-44 animate-pulse rounded-[22px] border border-[#E3D8EA] bg-white"
+                    className="h-44 animate-pulse rounded-[22px] border border-border bg-card"
                   />
                 ))
               : filteredDocuments.map((document) => (
                   <article
                     key={document.id}
-                    className="rounded-[22px] border border-[#E3D8EA] bg-white p-5 shadow-[0_8px_28px_rgba(52,31,96,0.055)] transition hover:-translate-y-0.5 hover:border-[#CDB4DB] hover:shadow-[0_12px_30px_rgba(52,31,96,0.09)]"
+                    className="rounded-[22px] border border-border bg-card p-5 shadow-[0_8px_28px_rgba(52,31,96,0.055)] transition hover:-translate-y-0.5 hover:border-input hover:shadow-[0_12px_30px_rgba(52,31,96,0.09)]"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <DocumentIcon sourceType={document.source_type} />
-                      <span className="rounded-full bg-[#EEE3FA] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#5F3378]">
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-secondary-foreground">
                         {sourceLabel(document.source_type)}
                       </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setSelectedDocument(document)}
-                      className="mt-5 block w-full text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+                      className="mt-5 block w-full text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
-                      <h3 className="truncate text-base font-semibold text-[#341F60]">
+                      <h3 className="truncate text-base font-semibold text-foreground">
                         {document.file_name ?? sourceLabel(document.source_type)}
                       </h3>
-                      <p className="mt-1 text-xs font-medium text-[#7D4698]">
+                      <p className="mt-1 text-xs font-medium text-primary">
                         {document.category}
                       </p>
-                      <p className="mt-3 text-[11px] leading-5 text-[#8B7895]">
+                      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
                         Added by {document.uploaded_by ?? "Client"} ·{" "}
                         {formatUploadDate(document.created_at)}
                       </p>
                     </button>
-                    <div className="mt-4 border-t border-[#EEE6F1] pt-3">
+                    <div className="mt-4 border-t border-border pt-3">
                       <button
                         type="button"
                         onClick={() => setSelectedDocument(document)}
-                        className="text-xs font-semibold text-[#7D4698] hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+                        className="text-xs font-semibold text-primary hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       >
                         Preview document
                       </button>
@@ -415,13 +425,13 @@ export default function DocumentsPage() {
           </div>
 
           {!isLoading && filteredDocuments.length === 0 && (
-            <div className="mt-6 rounded-[24px] border border-dashed border-[#D8C6E4] bg-white px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-[#341F60]">
+            <div className="mt-6 rounded-[24px] border border-dashed border-border bg-card px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-foreground">
                 {categoryFilter === "All"
                   ? "No documents have been added yet."
                   : `No ${categoryFilter.toLocaleLowerCase()} documents yet.`}
               </p>
-              <p className="mt-1 text-xs text-[#75647F]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 PDFs, Google Docs, and Google Slides will appear here.
               </p>
             </div>

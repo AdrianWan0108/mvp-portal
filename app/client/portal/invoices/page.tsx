@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useClientIdentity } from "../_components/ClientIdentity";
 
 type InvoiceStatus = "sent" | "received";
 
@@ -77,7 +78,7 @@ function StatusBadge({
   }
 
   return (
-    <span className="inline-flex rounded-full border border-[#DCCFE4] bg-[#F6F0F8] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#695677]">
+    <span className="inline-flex rounded-full border border-border bg-muted px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
       Sent
     </span>
   );
@@ -102,6 +103,7 @@ function InvoiceIcon() {
 }
 
 export default function InvoicesPage() {
+  const { clientSlug, clientName } = useClientIdentity();
   const [invoices, setInvoices] = useState<ClientInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -132,17 +134,24 @@ export default function InvoicesPage() {
 
     async function loadInvoices() {
       setIsLoading(true);
+      setInvoices([]);
+
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to view invoices.");
+        setIsLoading(false);
+        return;
+      }
 
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id")
-        .eq("slug", "mvp")
+        .eq("slug", clientSlug)
         .single();
 
       if (!isActive) return;
       if (clientError || !client) {
         setErrorMessage(
-          `Could not load the MVP client: ${clientError?.message ?? "Client not found."}`,
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
         );
         setIsLoading(false);
         return;
@@ -172,19 +181,19 @@ export default function InvoicesPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientName, clientSlug]);
 
   return (
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <header>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-            Client portal · MVP
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            Client portal · {clientName ?? "Client"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             Invoices
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             View invoice dates, payment receipt status, and downloadable PDFs.
           </p>
         </header>
@@ -192,7 +201,7 @@ export default function InvoicesPage() {
         {errorMessage && (
           <div
             role="alert"
-            className="mt-6 rounded-2xl border border-[#E4C88F] bg-[#FFF7E6] px-4 py-3 text-sm leading-6 text-[#805A22]"
+            className="mt-6 rounded-2xl border border-accent bg-accent/20 px-4 py-3 text-sm leading-6 text-accent-foreground"
           >
             {errorMessage}
           </div>
@@ -206,7 +215,7 @@ export default function InvoicesPage() {
             {
               label: "Total invoiced",
               value: totals.invoiced,
-              tone: "text-[#341F60]",
+              tone: "text-foreground",
             },
             {
               label: "Total received",
@@ -216,14 +225,14 @@ export default function InvoicesPage() {
             {
               label: "Total pending",
               value: totals.pending,
-              tone: "text-[#805A22]",
+              tone: "text-accent-foreground",
             },
           ].map((metric) => (
             <div
               key={metric.label}
-              className="rounded-[20px] border border-[#E3D8EA] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(52,31,96,0.04)]"
+              className="rounded-[20px] border border-border bg-card px-5 py-4 shadow-[0_8px_24px_rgba(52,31,96,0.04)]"
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {metric.label}
               </p>
               <p className={`mt-2 text-2xl font-semibold ${metric.tone}`}>
@@ -236,18 +245,18 @@ export default function InvoicesPage() {
         <section className="mt-10" aria-labelledby="invoice-list-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
                 Billing history
               </p>
               <h2
                 id="invoice-list-heading"
-                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
               >
                 All invoices
               </h2>
             </div>
             {!isLoading && (
-              <span className="rounded-full bg-[#EEE3FA] px-3 py-1.5 text-[11px] font-semibold text-[#5F3378]">
+              <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-secondary-foreground">
                 {invoices.length} invoices
               </span>
             )}
@@ -258,29 +267,29 @@ export default function InvoicesPage() {
               ? Array.from({ length: 3 }, (_, index) => (
                   <div
                     key={index}
-                    className="h-32 animate-pulse rounded-[22px] border border-[#E3D8EA] bg-white"
+                    className="h-32 animate-pulse rounded-[22px] border border-border bg-card"
                   />
                 ))
               : invoices.map((invoice) => (
                   <article
                     key={invoice.id}
-                    className="rounded-[22px] border border-[#E3D8EA] bg-white p-5 shadow-[0_8px_28px_rgba(52,31,96,0.05)] sm:p-6"
+                    className="rounded-[22px] border border-border bg-card p-5 shadow-[0_8px_28px_rgba(52,31,96,0.05)] sm:p-6"
                   >
                     <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-start gap-4">
-                        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-muted text-primary">
                           <InvoiceIcon />
                         </span>
                         <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-[#341F60]">
+                          <h3 className="truncate text-base font-semibold text-foreground">
                             Invoice {invoice.invoice_number}
                           </h3>
                           {invoice.description && (
-                            <p className="mt-1 line-clamp-2 text-sm leading-5 text-[#75647F]">
+                            <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
                               {invoice.description}
                             </p>
                           )}
-                          <p className="mt-2 text-[11px] text-[#8B7895]">
+                          <p className="mt-2 text-[11px] text-muted-foreground">
                             Issued {formatDate(invoice.issued_date)}
                             {invoice.due_date
                               ? ` · Due ${formatDate(invoice.due_date)}`
@@ -291,7 +300,7 @@ export default function InvoicesPage() {
 
                       <div className="flex shrink-0 items-center justify-between gap-5 sm:justify-end">
                         <div className="text-left sm:text-right">
-                          <p className="text-lg font-semibold text-[#341F60]">
+                          <p className="text-lg font-semibold text-foreground">
                             {formatCurrency(invoice.amount, invoice.currency)}
                           </p>
                           <div className="mt-1.5">
@@ -304,7 +313,7 @@ export default function InvoicesPage() {
                             target="_blank"
                             rel="noreferrer"
                             aria-label={`Open PDF for invoice ${invoice.invoice_number} in a new tab`}
-                            className="rounded-full border border-[#DCCFE4] bg-white px-4 py-2 text-xs font-semibold text-[#7D4698] transition hover:bg-[#EEE3FA] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+                            className="rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-primary transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                           >
                             Open PDF ↗
                           </a>
@@ -316,11 +325,11 @@ export default function InvoicesPage() {
           </div>
 
           {!isLoading && invoices.length === 0 && !errorMessage && (
-            <div className="mt-5 rounded-[24px] border border-dashed border-[#D8C6E4] bg-white px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-[#341F60]">
+            <div className="mt-5 rounded-[24px] border border-dashed border-border bg-card px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-foreground">
                 No invoices are available yet.
               </p>
-              <p className="mt-1 text-xs text-[#75647F]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Invoices and receipt statuses will appear here when published.
               </p>
             </div>

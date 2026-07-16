@@ -116,7 +116,7 @@ function AssetPreview({ asset }: { asset: ClientAsset }) {
       target="_blank"
       rel="noreferrer"
       aria-label={`Open ${asset.file_name ?? "uploaded asset"} in a new tab`}
-      className="group relative block aspect-[4/3] overflow-hidden bg-[linear-gradient(135deg,#EEE3FA,#FFF9EF)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#7D4698]"
+      className="group relative block aspect-[4/3] overflow-hidden bg-[linear-gradient(135deg,var(--muted),var(--background))] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
     >
       {isImage ? (
         <img
@@ -134,18 +134,18 @@ function AssetPreview({ asset }: { asset: ClientAsset }) {
             preload="metadata"
             className="size-full object-cover"
           />
-          <span className="absolute inset-0 bg-[#341F60]/10 transition group-hover:bg-[#341F60]/20" />
-          <span className="absolute left-1/2 top-1/2 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/92 text-[#7D4698] shadow-[0_8px_24px_rgba(52,31,96,0.18)] backdrop-blur-sm">
+          <span className="absolute inset-0 bg-foreground/10 transition group-hover:bg-foreground/20" />
+          <span className="absolute left-1/2 top-1/2 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-card/92 text-primary shadow-[0_8px_24px_rgba(52,31,96,0.18)] backdrop-blur-sm">
             <PlayIcon />
           </span>
         </>
       ) : (
-        <div className="flex size-full items-center justify-center px-6 text-center text-sm text-[#75647F]">
+        <div className="flex size-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
           Preview unavailable
         </div>
       )}
 
-      <span className="absolute bottom-3 right-3 rounded-full bg-[#341F60]/75 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur-sm">
+      <span className="absolute bottom-3 right-3 rounded-full bg-foreground/75 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-white backdrop-blur-sm">
         {isVideo ? "Video" : isImage ? "Image" : "File"}
       </span>
     </a>
@@ -153,7 +153,7 @@ function AssetPreview({ asset }: { asset: ClientAsset }) {
 }
 
 export default function AssetUploadPage() {
-  const { identity } = useClientIdentity();
+  const { identity, clientSlug, clientName } = useClientIdentity();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [assets, setAssets] = useState<ClientAsset[]>([]);
@@ -169,17 +169,26 @@ export default function AssetUploadPage() {
 
     async function loadAssets() {
       setIsLoading(true);
+      setClientId(null);
+      setAssets([]);
+      setSuccessMessage(null);
+
+      if (!clientSlug) {
+        setErrorMessage("Choose a client profile to upload assets.");
+        setIsLoading(false);
+        return;
+      }
 
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id")
-        .eq("slug", "mvp")
+        .eq("slug", clientSlug)
         .single();
 
       if (!isActive) return;
       if (clientError || !client) {
         setErrorMessage(
-          `Could not load the MVP client: ${clientError?.message ?? "Client not found."}`,
+          `Could not load ${clientName ?? "the selected client"}: ${clientError?.message ?? "Client not found."}`,
         );
         setIsLoading(false);
         return;
@@ -210,7 +219,7 @@ export default function AssetUploadPage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [clientName, clientSlug]);
 
   async function uploadFile(file: File) {
     if (!clientId || !identity || uploadPhase) return;
@@ -327,25 +336,25 @@ export default function AssetUploadPage() {
     <main className="min-h-screen px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <header>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7D4698]">
-            Client portal · MVP
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
+            Client portal · {clientName ?? "Client"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#341F60] sm:text-4xl">
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             Asset upload
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75647F] sm:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
             Send photography and video files directly to the Understory team.
           </p>
         </header>
 
         <section className="mt-10" aria-labelledby="upload-heading">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
               New asset
             </p>
             <h2
               id="upload-heading"
-              className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+              className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
             >
               Upload a file
             </h2>
@@ -374,8 +383,8 @@ export default function AssetUploadPage() {
             }}
             className={`mt-5 rounded-[28px] border-2 border-dashed px-6 py-12 text-center transition sm:px-10 sm:py-14 ${
               isDragging
-                ? "border-[#7D4698] bg-[#EEE3FA] shadow-[0_12px_32px_rgba(52,31,96,0.08)]"
-                : "border-[#D8C6E4] bg-white"
+                ? "border-primary bg-muted shadow-[0_12px_32px_rgba(52,31,96,0.08)]"
+                : "border-border bg-card"
             }`}
           >
             <input
@@ -387,13 +396,13 @@ export default function AssetUploadPage() {
               className="sr-only"
             />
 
-            <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#EEE3FA] text-[#7D4698]">
+            <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-muted text-primary">
               <UploadIcon />
             </span>
-            <h3 className="mt-5 text-lg font-semibold text-[#341F60]">
+            <h3 className="mt-5 text-lg font-semibold text-foreground">
               Drag an image or video here
             </h3>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#75647F]">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
               Or choose a file from your device. The upload will be attributed
               to {identity ? CLIENT_IDENTITIES[identity].name : "your identity"}.
             </p>
@@ -401,11 +410,11 @@ export default function AssetUploadPage() {
               type="button"
               disabled={!clientId || Boolean(uploadPhase)}
               onClick={() => fileInputRef.current?.click()}
-              className="mt-6 rounded-full bg-[#7D4698] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(52,31,96,0.15)] transition hover:bg-[#69377F] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+              className="mt-6 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[0_8px_20px_rgba(52,31,96,0.15)] transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {uploadPhase ? "Uploading…" : "Choose file"}
             </button>
-            <p className="mt-3 text-[11px] text-[#9A8AA3]">
+            <p className="mt-3 text-[11px] text-muted-foreground">
               Accepted formats: images and videos
             </p>
 
@@ -417,15 +426,15 @@ export default function AssetUploadPage() {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={uploadPhase === "uploading" ? 65 : 90}
-                  className="h-2 overflow-hidden rounded-full bg-[#E2D4EB]"
+                  className="h-2 overflow-hidden rounded-full bg-muted"
                 >
                   <div
-                    className={`h-full rounded-full bg-[#7D4698] transition-[width] duration-500 ${
+                    className={`h-full rounded-full bg-primary transition-[width] duration-500 ${
                       uploadPhase === "uploading" ? "w-2/3 animate-pulse" : "w-[90%]"
                     }`}
                   />
                 </div>
-                <p className="mt-2 text-xs font-medium text-[#5F3378]">
+                <p className="mt-2 text-xs font-medium text-secondary-foreground">
                   {uploadPhase === "uploading"
                     ? "Uploading file…"
                     : "Saving file details…"}
@@ -440,7 +449,7 @@ export default function AssetUploadPage() {
             role={errorMessage ? "alert" : "status"}
             className={`mt-6 rounded-2xl border px-4 py-3 text-sm leading-6 ${
               errorMessage
-                ? "border-[#E4C88F] bg-[#FFF7E6] text-[#805A22]"
+                ? "border-accent bg-accent/20 text-accent-foreground"
                 : "border-[#BFD8C7] bg-[#EDF7EF] text-[#356346]"
             }`}
           >
@@ -451,18 +460,18 @@ export default function AssetUploadPage() {
         <section className="mt-12" aria-labelledby="uploaded-assets-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-[#8B7895]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">
                 Shared files
               </p>
               <h2
                 id="uploaded-assets-heading"
-                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#341F60]"
+                className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground"
               >
                 Uploaded assets
               </h2>
             </div>
             {!isLoading && (
-              <span className="rounded-full bg-[#EEE3FA] px-3 py-1.5 text-[11px] font-semibold text-[#5F3378]">
+              <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-secondary-foreground">
                 {assets.length} files
               </span>
             )}
@@ -473,21 +482,21 @@ export default function AssetUploadPage() {
               ? Array.from({ length: 3 }, (_, index) => (
                   <div
                     key={index}
-                    className="h-72 animate-pulse rounded-[22px] border border-[#E3D8EA] bg-white"
+                    className="h-72 animate-pulse rounded-[22px] border border-border bg-card"
                   />
                 ))
               : assets.map((asset) => (
                   <article
                     key={asset.id}
-                    className="overflow-hidden rounded-[22px] border border-[#E3D8EA] bg-white shadow-[0_8px_28px_rgba(52,31,96,0.055)]"
+                    className="overflow-hidden rounded-[22px] border border-border bg-card shadow-[0_8px_28px_rgba(52,31,96,0.055)]"
                   >
                     <AssetPreview asset={asset} />
                     <div className="flex items-start justify-between gap-3 p-4">
                       <div className="min-w-0">
-                        <h3 className="truncate text-sm font-semibold text-[#341F60]">
+                        <h3 className="truncate text-sm font-semibold text-foreground">
                           {asset.file_name ?? "Untitled asset"}
                         </h3>
-                        <p className="mt-1 text-[11px] leading-5 text-[#8B7895]">
+                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                           Uploaded by {asset.uploaded_by ?? "Client"} ·{" "}
                           {formatUploadDate(asset.created_at)}
                         </p>
@@ -497,7 +506,7 @@ export default function AssetUploadPage() {
                         onClick={() => void deleteAsset(asset)}
                         disabled={Boolean(deletingId)}
                         aria-label={`Delete ${asset.file_name ?? "asset"}`}
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#E5D9EA] bg-white text-[#9A5A5A] transition hover:border-[#D7AAAA] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9A5A5A]"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-[#9A5A5A] transition hover:border-[#D7AAAA] hover:bg-[#FFF0F0] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9A5A5A]"
                       >
                         {deletingId === asset.id ? (
                           <span className="size-4 animate-spin rounded-full border-2 border-[#DDBBBB] border-t-[#9A5A5A]" />
@@ -511,11 +520,11 @@ export default function AssetUploadPage() {
           </div>
 
           {!isLoading && assets.length === 0 && !errorMessage && (
-            <div className="mt-5 rounded-[24px] border border-dashed border-[#D8C6E4] bg-white px-6 py-12 text-center">
-              <p className="text-sm font-semibold text-[#341F60]">
+            <div className="mt-5 rounded-[24px] border border-dashed border-border bg-card px-6 py-12 text-center">
+              <p className="text-sm font-semibold text-foreground">
                 No assets have been uploaded yet.
               </p>
-              <p className="mt-1 text-xs text-[#75647F]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Your uploaded images and videos will appear here.
               </p>
             </div>
