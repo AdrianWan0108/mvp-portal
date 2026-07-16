@@ -10,6 +10,7 @@ import mobilityPost from "@/public/Mobility's Post.png";
 import movementPost from "@/public/Movement's Post.png";
 import mvpIntroPoster from "@/public/mvp-intro-v3-poster.png";
 import { useClientIdentity } from "../../_components/ClientIdentity";
+import { sendSlackNotification } from "@/lib/slack-notifications";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -362,7 +363,7 @@ function PersonStatus({ personId, review: personReview, compact = false }: { per
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function SocialMediaApprovalsPage() {
-  const { identity, clientSlug, clientName } = useClientIdentity();
+  const { identity, reviewerName, clientSlug, clientName } = useClientIdentity();
   const currentUser: PersonId | null =
     identity === "gary" || identity === "dorothy" ? identity : null;
   const [posts, setPosts] = useState<Post[]>(initialPosts);
@@ -403,6 +404,8 @@ export default function SocialMediaApprovalsPage() {
 
   function approvePost(id: string) {
     if (!currentUser) return;
+    const post = posts.find((candidate) => candidate.id === id);
+    if (!post) return;
     const timestamp = currentTimestamp();
     setPosts((previous) =>
       previous.map((post) =>
@@ -423,10 +426,21 @@ export default function SocialMediaApprovalsPage() {
     );
     setIsRequestingChanges(false);
     setActionFeedback(`${PEOPLE[currentUser].name}’s approval was recorded at ${timestamp}.`);
+    if (clientSlug && reviewerName) {
+      void sendSlackNotification({
+        type: "client_review",
+        clientSlug,
+        action: "approved",
+        title: post.title ?? `${post.postType} post for ${post.date}`,
+        reviewerName,
+      });
+    }
   }
 
   function sendChanges(id: string) {
     if (!currentUser || !commentDraft.trim()) return;
+    const post = posts.find((candidate) => candidate.id === id);
+    if (!post) return;
     const timestamp = currentTimestamp();
     const note = commentDraft.trim();
     setPosts((previous) =>
@@ -449,6 +463,15 @@ export default function SocialMediaApprovalsPage() {
     setIsRequestingChanges(false);
     setCommentDraft("");
     setActionFeedback(`${PEOPLE[currentUser].name}’s change request was recorded at ${timestamp}.`);
+    if (clientSlug && reviewerName) {
+      void sendSlackNotification({
+        type: "client_review",
+        clientSlug,
+        action: "requested_changes",
+        title: post.title ?? `${post.postType} post for ${post.date}`,
+        reviewerName,
+      });
+    }
   }
 
   if (clientSlug !== "mvp") {

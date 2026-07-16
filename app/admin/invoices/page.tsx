@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { sendSlackNotification } from "@/lib/slack-notifications";
 import { useAdmin } from "../_components/AdminContext";
 import {
   AdminButton,
@@ -66,7 +67,7 @@ function storagePath(url: string) {
 }
 
 export default function AdminInvoicesPage() {
-  const { clientId, clientName } = useAdmin();
+  const { clientId, clientName, clientSlug } = useAdmin();
   const fileRef = useRef<HTMLInputElement>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [number, setNumber] = useState("");
@@ -133,6 +134,14 @@ export default function AdminInvoicesPage() {
           uploaded_by: "Understory admin",
         });
       if (insertError) throw insertError;
+      if (clientSlug) {
+        void sendSlackNotification({
+          type: "client_invoice",
+          clientSlug,
+          invoiceName: file.name,
+          amount: Number(amount),
+        });
+      }
       setSuccess("Invoice added.");
       setNumber("");
       setDescription("");

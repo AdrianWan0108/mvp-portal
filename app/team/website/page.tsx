@@ -14,6 +14,7 @@ import {
   isWorkspaceClientSlug,
   type WorkspaceClientSlug,
 } from "@/lib/workspace-clients";
+import { sendSlackNotification } from "@/lib/slack-notifications";
 import { UnderstoryBrand } from "../_components/UnderstoryBrand";
 
 type ClientSlug = WorkspaceClientSlug;
@@ -1609,6 +1610,13 @@ function WebsiteDevelopmentDashboard() {
     }
 
     setErrorMessage(null);
+    if (columnStatus === "review") {
+      void sendSlackNotification({
+        type: "task_review",
+        clientSlug: selectedClient,
+        title: task.title,
+      });
+    }
     return true;
   }
 

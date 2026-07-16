@@ -18,6 +18,7 @@ import {
   WORKSPACE_CLIENTS,
   isWorkspaceClientSlug,
 } from "@/lib/workspace-clients";
+import { sendSlackNotification } from "@/lib/slack-notifications";
 import { UnderstoryBrand } from "../../../_components/UnderstoryBrand";
 
 type PostStatus =
@@ -1093,6 +1094,13 @@ export default function AugustContentCalendarPage() {
     }
 
     setErrorMessage(null);
+    if (status === "for_review") {
+      void sendSlackNotification({
+        type: "task_review",
+        clientSlug,
+        title: post.title,
+      });
+    }
   }
 
   async function saveSlideImageLink(

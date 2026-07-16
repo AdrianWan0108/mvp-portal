@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { sendSlackNotification } from "@/lib/slack-notifications";
 import {
   TEAM_IDENTITIES,
   useTeamIdentity,
@@ -178,6 +179,13 @@ export default function TeamHubPayrollPage() {
         if (previousPath) {
           await supabase.storage.from(BUCKET).remove([previousPath]);
         }
+      }
+      if (editor.file) {
+        void sendSlackNotification({
+          type: "payroll_invoice",
+          staffUsername: editor.staffUsername,
+          amount: Number(editor.amount),
+        });
       }
       setEditor(null);
       void loadPayroll();
