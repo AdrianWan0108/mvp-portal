@@ -10,6 +10,7 @@ import {
   DIVISION_TASK_STATUSES,
   DIVISION_TASK_STATUS_DETAILS,
   EMPTY_CONTENT_BRIEF_DATA,
+  EMPTY_FILMING_CARD_DATA,
   specializedDivisionHref,
   type Division,
   type DivisionTaskStatus,
@@ -40,6 +41,7 @@ type DivisionTask = {
   status: DivisionTaskStatus;
   template_type: DivisionTaskTemplate;
   content_brief_data: unknown;
+  filming_card_data: unknown;
   research_entries: unknown;
   figjam_embed_url: string | null;
   created_at: string;
@@ -66,6 +68,13 @@ const socialMediaTemplates: TemplateOption[] = [
     description:
       "Create an empty post-and-slide review workspace using the existing calendar structure.",
     defaultTitle: "Content calendar",
+  },
+  {
+    id: "filming_card",
+    label: "Filming card",
+    description:
+      "Coordinate participants, filming date, script, prep, and footage.",
+    defaultTitle: "Filming card",
   },
   {
     id: "analytics_results_hub",
@@ -212,7 +221,7 @@ export default function TeamHubProjectsPage() {
       const { data, error: taskError } = await supabase
         .from("division_tasks")
         .select(
-          "id, client_id, division, title, description, status, template_type, content_brief_data, research_entries, figjam_embed_url, created_at",
+          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, created_at",
         )
         .eq("client_id", clientRecord.id)
         .eq("division", division)
@@ -274,10 +283,14 @@ export default function TeamHubProjectsPage() {
           selectedTemplate === "content_brief"
             ? EMPTY_CONTENT_BRIEF_DATA
             : null,
+        filming_card_data:
+          selectedTemplate === "filming_card"
+            ? EMPTY_FILMING_CARD_DATA
+            : null,
         research_entries: [],
       })
       .select(
-        "id, client_id, division, title, description, status, template_type, content_brief_data, research_entries, figjam_embed_url, created_at",
+        "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, created_at",
       )
       .single();
     setIsSaving(false);

@@ -22,6 +22,7 @@ create table if not exists public.division_tasks (
   ),
   template_type text not null default 'generic',
   content_brief_data jsonb,
+  filming_card_data jsonb,
   research_entries jsonb not null default '[]'::jsonb,
   figjam_embed_url text,
   created_at timestamptz default now()
@@ -31,6 +32,8 @@ alter table public.division_tasks
   add column if not exists template_type text;
 alter table public.division_tasks
   add column if not exists content_brief_data jsonb;
+alter table public.division_tasks
+  add column if not exists filming_card_data jsonb;
 alter table public.division_tasks
   add column if not exists research_entries jsonb;
 
@@ -57,6 +60,30 @@ alter table public.division_tasks
   alter column template_type set default 'generic';
 alter table public.division_tasks
   alter column template_type set not null;
+
+alter table public.division_tasks
+  drop constraint if exists division_tasks_template_type_check;
+alter table public.division_tasks
+  add constraint division_tasks_template_type_check
+  check (
+    template_type in (
+      'generic',
+      'content_brief',
+      'content_calendar',
+      'analytics_results_hub',
+      'filming_card',
+      'website_dashboard'
+    )
+  );
+
+alter table public.division_tasks
+  drop constraint if exists division_tasks_filming_card_data_check;
+alter table public.division_tasks
+  add constraint division_tasks_filming_card_data_check
+  check (
+    filming_card_data is null
+    or jsonb_typeof(filming_card_data) = 'object'
+  );
 
 alter table public.tasks
   add column if not exists division_task_id uuid

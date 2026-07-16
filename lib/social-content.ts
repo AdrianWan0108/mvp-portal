@@ -106,6 +106,23 @@ export function isSocialContentType(
   );
 }
 
+export function resolveInstagramEmbedUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl.trim());
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (hostname !== "instagram.com") return null;
+
+    const match = url.pathname.match(/^\/(p|reel|tv)\/([^/]+)/i);
+    if (!match) return null;
+
+    return `https://www.instagram.com/${match[1].toLowerCase()}/${encodeURIComponent(
+      match[2],
+    )}/embed/`;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeReelDetails(value: unknown): ReelDetails {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { ...EMPTY_REEL_DETAILS };

@@ -40,6 +40,7 @@ export const DIVISION_TASK_TEMPLATES = [
   "content_brief",
   "content_calendar",
   "analytics_results_hub",
+  "filming_card",
   "website_dashboard",
 ] as const;
 
@@ -60,6 +61,36 @@ export const EMPTY_CONTENT_BRIEF_DATA: ContentBriefData = {
   key_messages: "",
   content_pillars: "",
   due_date: "",
+};
+
+export type FilmingCardData = {
+  filming_date: string;
+  participants: string[];
+  needs_models: boolean;
+  script: string;
+  prep_work: string;
+  footage_drive_link: string;
+  filmed: boolean;
+  source_reference_id: string;
+  source_reference_url: string;
+};
+
+export const EMPTY_FILMING_CARD_DATA: FilmingCardData = {
+  filming_date: "",
+  participants: [],
+  needs_models: false,
+  script: "",
+  prep_work: "",
+  footage_drive_link: "",
+  filmed: false,
+  source_reference_id: "",
+  source_reference_url: "",
+};
+
+export const FILMING_PARTICIPANTS_BY_CLIENT: Partial<
+  Record<WorkspaceClientSlug, string[]>
+> = {
+  mvp: ["Dorothy", "Gary"],
 };
 
 export const DIVISION_TASK_STATUS_DETAILS: Record<
@@ -128,6 +159,43 @@ export function normalizeContentBriefData(
         ? record.content_pillars
         : "",
     due_date: typeof record.due_date === "string" ? record.due_date : "",
+  };
+}
+
+export function normalizeFilmingCardData(
+  value: unknown,
+): FilmingCardData {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ...EMPTY_FILMING_CARD_DATA };
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    filming_date:
+      typeof record.filming_date === "string" ? record.filming_date : "",
+    participants: Array.isArray(record.participants)
+      ? record.participants.filter(
+          (participant): participant is string =>
+            typeof participant === "string",
+        )
+      : [],
+    needs_models: record.needs_models === true,
+    script: typeof record.script === "string" ? record.script : "",
+    prep_work:
+      typeof record.prep_work === "string" ? record.prep_work : "",
+    footage_drive_link:
+      typeof record.footage_drive_link === "string"
+        ? record.footage_drive_link
+        : "",
+    filmed: record.filmed === true,
+    source_reference_id:
+      typeof record.source_reference_id === "string"
+        ? record.source_reference_id
+        : "",
+    source_reference_url:
+      typeof record.source_reference_url === "string"
+        ? record.source_reference_url
+        : "",
   };
 }
 

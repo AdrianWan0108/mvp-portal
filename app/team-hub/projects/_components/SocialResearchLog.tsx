@@ -10,6 +10,7 @@ import {
   SOCIAL_HOOK_TYPE_LABELS,
   SOCIAL_POST_FORMATS,
   SOCIAL_POST_FORMAT_LABELS,
+  resolveInstagramEmbedUrl,
   type SocialContentType,
   type SocialHookType,
   type SocialPostFormat,
@@ -85,23 +86,6 @@ function normalizeEntry(entry: SocialResearchEntry): SocialResearchEntry {
     why_it_worked: entry.why_it_worked ?? "",
     cta: entry.cta ?? null,
   };
-}
-
-function instagramEmbedUrl(rawUrl: string) {
-  try {
-    const url = new URL(rawUrl.trim());
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    if (hostname !== "instagram.com") return null;
-
-    const match = url.pathname.match(/^\/(p|reel|tv)\/([^/]+)/i);
-    if (!match) return null;
-
-    return `https://www.instagram.com/${match[1].toLowerCase()}/${encodeURIComponent(
-      match[2],
-    )}/embed/`;
-  } catch {
-    return null;
-  }
 }
 
 function formatViews(value: number | null) {
@@ -301,47 +285,32 @@ export function SocialResearchLog({
     setPlanningEntryId(entry.id);
     setMessage(null);
 
-    const contentPillars = [
-      entry.content_type
-        ? SOCIAL_CONTENT_TYPE_LABELS[entry.content_type]
-        : null,
-      entry.storytelling_approach || null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const keyMessages = [
-      entry.hook ? `Reference hook: ${entry.hook}` : null,
-      entry.hook_explanation || null,
-      entry.cta ? `Reference CTA: ${entry.cta}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const campaignGoal = [
-      `Develop an original ${SOCIAL_POST_FORMAT_LABELS[
-        entry.format
-      ].toLowerCase()} concept informed by this research reference.`,
-      entry.why_it_worked
-        ? `What to learn from: ${entry.why_it_worked}`
-        : null,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const titleDescriptor = entry.content_type
+      ? `${SOCIAL_CONTENT_TYPE_LABELS[entry.content_type]} ${
+          SOCIAL_POST_FORMAT_LABELS[entry.format]
+        }`
+      : `Social media ${SOCIAL_POST_FORMAT_LABELS[entry.format]}`;
 
     const { data, error } = await supabase
       .from("division_tasks")
       .insert({
         client_id: clientId,
         division: "social-media",
-        title: `Content brief — ${entryTitle(entry)}`,
-        description: `Planned from social research reference: ${entry.reference_link}`,
+        title: `Filming — ${titleDescriptor}`,
+        description: "Production plan created from social media research.",
         status: "planning",
-        template_type: "content_brief",
-        content_brief_data: {
-          campaign_goal: campaignGoal,
-          target_audience: "",
-          key_messages: keyMessages,
-          content_pillars: contentPillars,
-          due_date: "",
+        template_type: "filming_card",
+        filming_card_data: {
+          filming_date: "",
+          participants: [],
+          needs_models: false,
+          script:
+            entry.hook_explanation || entry.storytelling_approach || "",
+          prep_work: "",
+          footage_drive_link: "",
+          filmed: false,
+          source_reference_id: entry.id,
+          source_reference_url: entry.reference_link,
         },
         research_entries: [],
       })
@@ -351,7 +320,7 @@ export function SocialResearchLog({
     setPlanningEntryId(null);
     if (error || !data) {
       setMessage(
-        `Could not create the content brief: ${
+        `Could not create the filming card: ${
           error?.message ?? "No task returned."
         }`,
       );
@@ -402,7 +371,7 @@ export function SocialResearchLog({
       ) : entries.length ? (
         <div className="mt-6 grid gap-5">
           {entries.map((entry) => {
-            const embedUrl = instagramEmbedUrl(entry.reference_link);
+            const embedUrl = resolveInstagramEmbedUrl(entry.reference_link);
             const embedFailed = failedEmbeds[entry.id];
 
             return (
@@ -485,7 +454,7 @@ export function SocialResearchLog({
                             onClick={() => void planToShoot(entry)}
                           >
                             {planningEntryId === entry.id
-                              ? "Creating brief…"
+                              ? "Creating filming card…"
                               : "Plan to shoot"}
                           </TeamButton>
                         )}

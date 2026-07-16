@@ -27,6 +27,7 @@ import {
   type WorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { ContentBriefEditor } from "../_components/ContentBriefEditor";
+import { FilmingCardEditor } from "../_components/FilmingCardEditor";
 import { FigJamTaskBoard } from "../_components/FigJamTaskBoard";
 import { useProjectTheme } from "../_components/ProjectThemeProvider";
 import { SocialResearchLog } from "../_components/SocialResearchLog";
@@ -40,6 +41,7 @@ type DivisionTask = {
   status: DivisionTaskStatus;
   template_type: DivisionTaskTemplate;
   content_brief_data: unknown;
+  filming_card_data: unknown;
   figjam_embed_url: string | null;
   created_at: string;
 };
@@ -64,7 +66,7 @@ export default function DivisionTaskDetailPage() {
       const { data, error: taskError } = await supabase
         .from("division_tasks")
         .select(
-          "id, client_id, division, title, description, status, template_type, content_brief_data, figjam_embed_url, created_at",
+          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, figjam_embed_url, created_at",
         )
         .eq("id", taskId)
         .single();
@@ -276,6 +278,15 @@ export default function DivisionTaskDetailPage() {
             key={task.id}
             taskId={task.id}
             initialData={task.content_brief_data}
+          />
+        )}
+
+        {task.template_type === "filming_card" && (
+          <FilmingCardEditor
+            key={task.id}
+            taskId={task.id}
+            clientSlug={clientSlug}
+            initialData={task.filming_card_data}
           />
         )}
 
