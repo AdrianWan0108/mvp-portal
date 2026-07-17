@@ -49,6 +49,7 @@ type DivisionTask = {
   research_entries: unknown;
   figjam_embed_url: string | null;
   assignee_usernames: string[];
+  watcher_usernames: string[];
   created_at: string;
 };
 
@@ -293,7 +294,7 @@ export default function TeamHubProjectsPage() {
       const { data, error: taskError } = await supabase
         .from("division_tasks")
         .select(
-          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, created_at",
+          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, watcher_usernames, created_at",
         )
         .eq("client_id", clientRecord.id)
         .eq("division", division)
@@ -359,7 +360,7 @@ export default function TeamHubProjectsPage() {
         research_entries: [],
       })
       .select(
-        "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, created_at",
+        "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, watcher_usernames, created_at",
       )
       .single();
     setIsSaving(false);
@@ -398,6 +399,7 @@ export default function TeamHubProjectsPage() {
   }
 
   function openPeoplePicker(task: DivisionTask) {
+    if (!isOwner) return;
     setTaskToAssign(task);
     setSelectedAssignees(task.assignee_usernames ?? []);
     setAssignmentError(null);
@@ -420,7 +422,7 @@ export default function TeamHubProjectsPage() {
   }
 
   async function saveAssignees() {
-    if (!taskToAssign || isSavingAssignees) return;
+    if (!isOwner || !taskToAssign || isSavingAssignees) return;
 
     setIsSavingAssignees(true);
     setAssignmentError(null);
@@ -576,6 +578,14 @@ export default function TeamHubProjectsPage() {
                     ),
                   )
                   .filter((member): member is TeamMember => Boolean(member));
+                const watcherNames = (task.watcher_usernames ?? [])
+                  .map(
+                    (username) =>
+                      teamMembers.find(
+                        (member) => member.team_username === username,
+                      )?.full_name,
+                  )
+                  .filter((name): name is string => Boolean(name));
 
                 return (
                   <article
@@ -615,46 +625,56 @@ export default function TeamHubProjectsPage() {
                       </p>
                     </Link>
                     <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openPeoplePicker(task)}
-                        className="inline-flex min-w-0 items-center gap-2 rounded-full text-xs font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
-                        aria-label={`${
-                          assignedMembers.length ? "Edit people on" : "Assign people to"
-                        } ${task.title}`}
-                      >
-                        {assignedMembers.length ? (
-                          <span
-                            className="flex -space-x-2"
-                            aria-label={assignedMembers
-                              .map((member) => member.full_name)
-                              .join(", ")}
-                          >
-                            {assignedMembers.slice(0, 3).map((member) => (
-                              <span
-                                key={member.team_username}
-                                className="rounded-full border-2 border-[var(--card)]"
-                              >
-                                <MemberAvatar member={member} />
-                              </span>
-                            ))}
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          disabled={!isOwner}
+                          onClick={() => openPeoplePicker(task)}
+                          className="inline-flex min-w-0 items-center gap-2 rounded-full text-xs font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] disabled:cursor-default disabled:hover:text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+                          aria-label={`${
+                            assignedMembers.length ? "Edit people on" : "Assign people to"
+                          } ${task.title}`}
+                        >
+                          {assignedMembers.length ? (
+                            <span
+                              className="flex -space-x-2"
+                              aria-label={assignedMembers
+                                .map((member) => member.full_name)
+                                .join(", ")}
+                            >
+                              {assignedMembers.slice(0, 3).map((member) => (
+                                <span
+                                  key={member.team_username}
+                                  className="rounded-full border-2 border-[var(--card)]"
+                                >
+                                  <MemberAvatar member={member} />
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span
+                              aria-hidden="true"
+                              className="flex size-7 items-center justify-center rounded-full border border-dashed border-[var(--border)] bg-[var(--muted)] text-sm text-[var(--primary)]"
+                            >
+                              +
+                            </span>
+                          )}
+                          <span className="truncate">
+                            {assignedMembers.length
+                              ? `${assignedMembers.length} ${
+                                  assignedMembers.length === 1 ? "person" : "people"
+                                }`
+                              : isOwner
+                                ? "Assign people"
+                                : "Unassigned"}
                           </span>
-                        ) : (
-                          <span
-                            aria-hidden="true"
-                            className="flex size-7 items-center justify-center rounded-full border border-dashed border-[var(--border)] bg-[var(--muted)] text-sm text-[var(--primary)]"
-                          >
-                            +
-                          </span>
+                        </button>
+                        {watcherNames.length > 0 && (
+                          <p className="mt-1 truncate text-[10px] text-[var(--muted-foreground)]">
+                            {watcherNames.join(" + ")} watching
+                          </p>
                         )}
-                        <span className="truncate">
-                          {assignedMembers.length
-                            ? `${assignedMembers.length} ${
-                                assignedMembers.length === 1 ? "person" : "people"
-                              }`
-                            : "Assign people"}
-                        </span>
-                      </button>
+                      </div>
                       {isOwner && (
                         <button
                           type="button"

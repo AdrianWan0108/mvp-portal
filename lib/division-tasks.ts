@@ -213,7 +213,10 @@ export function specializedDivisionHref(
   }
 
   if (division === "website") {
-    return `/team-hub/projects/website?client=${client}`;
+    const taskQuery = taskId
+      ? `&task=${encodeURIComponent(taskId)}`
+      : "";
+    return `/team-hub/projects/website?client=${client}${taskQuery}`;
   }
 
   return null;

@@ -26,6 +26,13 @@ alter table public.tasks
   add column if not exists assignee_usernames text[]
     not null default '{}'::text[];
 
+alter table public.tasks
+  add column if not exists watcher_usernames text[]
+    not null default array[
+      'Understory_Karen',
+      'Understory_Adrian'
+    ]::text[];
+
 -- Preserve the existing Emilia calendar assignment when migrating old rows.
 update public.tasks
 set assigned_to = assignee
@@ -73,6 +80,9 @@ create index if not exists website_tasks_assignee_usernames_idx
 
 create index if not exists tasks_assignee_usernames_idx
   on public.tasks using gin (assignee_usernames);
+
+create index if not exists tasks_watcher_usernames_idx
+  on public.tasks using gin (watcher_usernames);
 
 create table if not exists public.team_payroll (
   id uuid primary key default gen_random_uuid(),

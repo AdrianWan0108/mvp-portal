@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { teamNameForUsername } from "@/lib/team-assignments";
 import {
   WORKSPACE_CLIENTS,
   isWorkspaceClientSlug,
@@ -17,13 +18,28 @@ type ClientRow = {
 
 type AssignedTask = {
   id: string;
-  source: "project" | "website" | "social";
+  source: "project" | "item" | "website" | "social";
   title: string;
   clientName: string;
   clientSlug: string;
   status: string;
   href: string;
   createdAt: string;
+  assigneeNames: string[];
+};
+
+type DivisionTaskItemRow = {
+  id: string;
+  title: string;
+  completed: boolean;
+  assignee_usernames: string[];
+  created_at: string;
+  division_tasks: {
+    id: string;
+    client_id: string;
+    division: string;
+    template_type: string;
+  } | null;
 };
 
 type DivisionTaskRow = {
@@ -33,6 +49,7 @@ type DivisionTaskRow = {
   title: string;
   status: string;
   template_type: string;
+  assignee_usernames: string[];
   created_at: string;
 };
 
@@ -78,6 +95,7 @@ type SocialTaskRow = {
   title: string;
   status: string;
   assigned_to: string | null;
+  assignee_usernames: string[];
   created_at: string;
 };
 
@@ -146,7 +164,7 @@ function relativeDate(value: string) {
   );
 }
 
-function taskHref(source: AssignedTask["source"], clientSlug: string) {
+function taskHref(source: "website" | "social", clientSlug: string) {
   if (!isWorkspaceClientSlug(clientSlug)) return "/team-hub/projects";
   return source === "website"
     ? `/team/website?client=${clientSlug}`
@@ -158,7 +176,7 @@ function divisionTaskHref(task: DivisionTaskRow, clientSlug: string) {
     return `/team-hub/projects/${encodeURIComponent(task.id)}/calendar?calendar=${encodeURIComponent(task.id)}`;
   }
   if (task.division === "website" && isWorkspaceClientSlug(clientSlug)) {
-    return `/team-hub/projects/website?client=${clientSlug}`;
+    return `/team-hub/projects/website?client=${clientSlug}&task=${encodeURIComponent(task.id)}`;
   }
   return `/team-hub/projects/${encodeURIComponent(task.id)}`;
 }
@@ -323,6 +341,7 @@ export default function TeamHubDashboardPage() {
         clientsResult,
         projectAssignedResult,
         socialAssignedResult,
+        itemAssignedResult,
         activityResult,
         meetingsResult,
         websiteReviewResult,
@@ -335,14 +354,32 @@ export default function TeamHubDashboardPage() {
         supabase
           .from("division_tasks")
           .select(
-            "id, client_id, division, title, status, template_type, created_at",
+            "id, client_id, division, title, status, template_type, assignee_usernames, created_at",
           )
-          .contains("assignee_usernames", [activeUsername])
+          .contains(
+            isOwner ? "watcher_usernames" : "assignee_usernames",
+            [activeUsername],
+          )
           .order("created_at", { ascending: false }),
         supabase
           .from("tasks")
-          .select("id, client_id, title, status, assigned_to, created_at")
-          .contains("assignee_usernames", [activeUsername])
+          .select(
+            "id, client_id, title, status, assigned_to, assignee_usernames, created_at",
+          )
+          .contains(
+            isOwner ? "watcher_usernames" : "assignee_usernames",
+            [activeUsername],
+          )
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("division_task_items")
+          .select(
+            "id, title, completed, assignee_usernames, created_at, division_tasks!inner(id, client_id, division, template_type)",
+          )
+          .contains(
+            isOwner ? "watcher_usernames" : "assignee_usernames",
+            [activeUsername],
+          )
           .order("created_at", { ascending: false }),
         supabase
           .from("team_activity_log")
@@ -415,6 +452,8 @@ export default function TeamHubDashboardPage() {
         []) as DivisionTaskRow[];
       const socialAssigned = (socialAssignedResult.data ??
         []) as SocialTaskRow[];
+      const itemAssigned = (itemAssignedResult.data ??
+        []) as unknown as DivisionTaskItemRow[];
       const nextAssignedTasks: AssignedTask[] = [
         ...projectAssigned.map((task) => {
           const client = clientDetails(task.client_id);
@@ -427,6 +466,9 @@ export default function TeamHubDashboardPage() {
             status: task.status,
             href: divisionTaskHref(task, client.slug),
             createdAt: task.created_at,
+            assigneeNames: task.assignee_usernames
+              .map(teamNameForUsername)
+              .filter((value): value is string => Boolean(value)),
           };
         }),
         ...socialAssigned.map((task) => {
@@ -440,7 +482,37 @@ export default function TeamHubDashboardPage() {
             status: task.status,
             href: taskHref("social", client.slug),
             createdAt: task.created_at,
+            assigneeNames: task.assignee_usernames
+              .map(teamNameForUsername)
+              .filter((value): value is string => Boolean(value)),
           };
+        }),
+        ...itemAssigned.flatMap((item) => {
+          const parent = item.division_tasks;
+          if (!parent) return [];
+          const client = clientDetails(parent.client_id);
+          return [{
+            id: `item-${item.id}`,
+            source: "item" as const,
+            title: item.title,
+            clientName: client.name,
+            clientSlug: client.slug,
+            status: item.completed ? "done" : "not_started",
+            href: divisionTaskHref(
+              {
+                ...parent,
+                title: item.title,
+                status: item.completed ? "done" : "not_started",
+                assignee_usernames: item.assignee_usernames,
+                created_at: item.created_at,
+              },
+              client.slug,
+            ),
+            createdAt: item.created_at,
+            assigneeNames: item.assignee_usernames
+              .map(teamNameForUsername)
+              .filter((value): value is string => Boolean(value)),
+          }];
         }),
       ].sort(
         (first, second) =>
@@ -582,6 +654,7 @@ export default function TeamHubDashboardPage() {
         clientsResult.error && "client names",
         projectAssignedResult.error && "project assignments",
         socialAssignedResult.error && "social-media assignments",
+        itemAssignedResult.error && "task item assignments",
         activityResult.error && "project updates",
         meetingsResult.error && "upcoming meetings",
         websiteReviewResult.error && "website review items",
@@ -680,8 +753,8 @@ export default function TeamHubDashboardPage() {
             />
             <OwnerSummaryCard
               value={isLoading ? "—" : assignedTasks.length}
-              label="Tasks assigned to you"
-              detail="Your active project and social tasks"
+              label="Tasks you’re watching"
+              detail="See who is in charge across active tasks"
               href="#assigned-tasks"
             />
             <OwnerSummaryCard
@@ -702,7 +775,7 @@ export default function TeamHubDashboardPage() {
         <div className="mt-8 grid gap-6 xl:grid-cols-3">
           <Card
             id="assigned-tasks"
-            title="Tasks assigned to you"
+            title={isOwner ? "Tasks you’re watching" : "Tasks assigned to you"}
             eyebrow="Your work"
           >
             {isLoading ? (
@@ -718,6 +791,8 @@ export default function TeamHubDashboardPage() {
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EEE3FA] text-sm font-semibold text-[#7D4698]">
                       {task.source === "project"
                         ? "P"
+                        : task.source === "item"
+                          ? "I"
                         : task.source === "website"
                           ? "W"
                           : "S"}
@@ -731,6 +806,11 @@ export default function TeamHubDashboardPage() {
                         <span aria-hidden="true">·</span>
                         <span>{formatStatus(task.status)}</span>
                       </span>
+                      {isOwner && (
+                        <span className="mt-1 block truncate text-[11px] font-medium text-[#695677]">
+                          In charge: {task.assigneeNames.join(", ") || "Unassigned"}
+                        </span>
+                      )}
                     </span>
                     <span className="text-[#AA98B4] transition group-hover:translate-x-0.5 group-hover:text-[#7D4698]">
                       →
@@ -739,7 +819,11 @@ export default function TeamHubDashboardPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState>No tasks assigned to you right now.</EmptyState>
+              <EmptyState>
+                {isOwner
+                  ? "No tasks are being watched right now."
+                  : "No tasks assigned to you right now."}
+              </EmptyState>
             )}
           </Card>
 

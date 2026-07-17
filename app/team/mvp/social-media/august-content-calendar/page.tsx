@@ -26,6 +26,7 @@ import {
   useTaskTeamMembers,
   type TaskTeamMember,
 } from "@/app/team-hub/projects/_components/TaskPeoplePicker";
+import { TaskItemsEditor } from "@/app/team-hub/projects/_components/TaskItemsEditor";
 import {
   WORKSPACE_CLIENTS,
   isWorkspaceClientSlug,
@@ -76,6 +77,7 @@ type Post = {
   reelDetails: ReelDetails;
   assignedTo: string | null;
   assigneeUsernames: string[];
+  watcherUsernames: string[];
   slides: Slide[];
 };
 
@@ -100,6 +102,7 @@ type TaskRow = {
   reel_details: unknown;
   assigned_to: string | null;
   assignee_usernames: string[] | null;
+  watcher_usernames: string[] | null;
   created_at: string;
   task_slides: TaskSlideRow[] | null;
 };
@@ -126,6 +129,7 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
       task.assignee_usernames,
       task.assigned_to,
     ),
+    watcherUsernames: task.watcher_usernames ?? [],
     slides: (task.task_slides ?? [])
       .sort((a, b) => a.slide_number - b.slide_number)
       .map((slide) => ({
@@ -418,6 +422,12 @@ function PostCard({
   confirmDelete: boolean;
 }) {
   const cardCoverImage = getCardCoverImage(post);
+  const watcherNames = post.watcherUsernames
+    .map(
+      (username) =>
+        members.find((member) => member.team_username === username)?.full_name,
+    )
+    .filter((name): name is string => Boolean(name));
   const [coverPrimary, coverSecondary] =
     slidePalettes[(post.id - 1) % slidePalettes.length];
 
@@ -525,6 +535,11 @@ function PostCard({
             />
           )}
         </div>
+        {watcherNames.length > 0 && (
+          <p className="relative z-20 mt-2 text-[10px] text-[#8B7895]">
+            {watcherNames.join(" + ")} watching
+          </p>
+        )}
       </div>
     </article>
   );
@@ -1285,6 +1300,7 @@ function AugustContentCalendarContent() {
             reel_details,
             assigned_to,
             assignee_usernames,
+            watcher_usernames,
             created_at,
             task_slides (
               id,
@@ -1800,6 +1816,8 @@ function AugustContentCalendarContent() {
             </div>
           )}
         </section>
+
+        {calendarTaskId && <TaskItemsEditor taskId={calendarTaskId} />}
 
         <footer className="mt-10 flex flex-col gap-1 border-t border-[#E0D4E8] py-6 text-xs text-[#8B7895] sm:flex-row sm:justify-between">
           <p>{clientLabel} · Internal content workspace</p>

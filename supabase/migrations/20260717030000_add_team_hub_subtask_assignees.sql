@@ -1,6 +1,6 @@
--- Add multi-person assignments to the nested Website and Content Calendar
--- tasks opened from Team Hub projects. Existing single-person assignments are
--- preserved and backfilled to stable profile usernames.
+-- Add multi-person assignments to nested Team Hub tasks. The website columns
+-- remain for compatibility with the original migration, though website pages
+-- no longer expose assignment or watching controls in the application.
 
 begin;
 

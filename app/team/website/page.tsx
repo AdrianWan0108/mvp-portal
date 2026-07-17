@@ -15,18 +15,8 @@ import {
   type WorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { sendSlackNotification } from "@/lib/slack-notifications";
-import { PROJECT_ASSIGNEES } from "@/lib/social-content";
-import {
-  normalizeAssigneeUsernames,
-  teamNameForUsername,
-  teamUsernameForName,
-} from "@/lib/team-assignments";
 import { useOptionalProjectTheme } from "@/app/team-hub/projects/_components/ProjectThemeProvider";
-import {
-  TaskPeopleButton,
-  TaskPeopleModal,
-  useTaskTeamMembers,
-} from "@/app/team-hub/projects/_components/TaskPeoplePicker";
+import { TaskItemsEditor } from "@/app/team-hub/projects/_components/TaskItemsEditor";
 import { UnderstoryBrand } from "../_components/UnderstoryBrand";
 
 type ClientSlug = WorkspaceClientSlug;
@@ -49,8 +39,6 @@ type WebsiteTask = {
   column_status: ColumnStatus;
   priority: Priority;
   live_url: string | null;
-  assigned_to: string | null;
-  assignee_usernames: string[];
   created_at: string;
 };
 
@@ -283,15 +271,9 @@ function formatTaskDate(value: string) {
 function TaskListRow({
   task,
   onOpen,
-  canManage,
-  members,
-  onManagePeople,
 }: {
   task: WebsiteTask;
   onOpen: () => void;
-  canManage: boolean;
-  members: ReturnType<typeof useTaskTeamMembers>;
-  onManagePeople: () => void;
 }) {
   const column = columns.find((candidate) => candidate.id === task.column_status);
 
@@ -321,19 +303,6 @@ function TaskListRow({
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-        <span
-          className="relative z-10"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <TaskPeopleButton
-            taskTitle={task.title}
-            assigneeUsernames={task.assignee_usernames}
-            members={members}
-            mode="watching"
-            disabled={!canManage}
-            onClick={onManagePeople}
-          />
-        </span>
         <span
           className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={{ backgroundColor: column?.tint, color: column?.text }}
@@ -366,13 +335,11 @@ function AddTaskModal({
     title: string;
     description: string;
     priority: Priority;
-    assignedTo: string | null;
   }) => Promise<boolean>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("normal");
-  const [assignedTo, setAssignedTo] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -383,7 +350,6 @@ function AddTaskModal({
       title: title.trim(),
       description: description.trim(),
       priority,
-      assignedTo: assignedTo || null,
     });
     setIsSaving(false);
     if (didCreate) onClose();
@@ -475,24 +441,6 @@ function AddTaskModal({
               ))}
             </div>
           </fieldset>
-
-          <label className="block">
-            <span className="text-xs font-semibold text-[#695677]">
-              Initial watcher
-            </span>
-            <select
-              value={assignedTo}
-              onChange={(event) => setAssignedTo(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-[#DED0E7] bg-[#FFFCF7] px-3.5 py-3 text-sm text-[#341F60] outline-none transition focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
-            >
-              <option value="">No watcher</option>
-              {PROJECT_ASSIGNEES.map((assignee) => (
-                <option key={assignee} value={assignee}>
-                  {assignee}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <div className="flex justify-end gap-2 border-t border-[#E9E0EF] pt-5">
             <button
@@ -1433,6 +1381,7 @@ function WebsiteDevelopmentDashboard() {
   const searchParams = useSearchParams();
   const projectTheme = useOptionalProjectTheme();
   const requestedClient = searchParams.get("client");
+  const requestedTaskId = searchParams.get("task");
   const initialClient: ClientSlug =
     isWorkspaceClientSlug(requestedClient) ? requestedClient : "mvp";
   const [selectedClient, setSelectedClient] =
@@ -1452,11 +1401,6 @@ function WebsiteDevelopmentDashboard() {
     accessLevel: TeamAccessLevel;
   } | null>(null);
   const [isTeamProfileReady, setIsTeamProfileReady] = useState(false);
-  const [taskToAssign, setTaskToAssign] = useState<WebsiteTask | null>(null);
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const [isSavingAssignees, setIsSavingAssignees] = useState(false);
-  const [assignmentError, setAssignmentError] = useState<string | null>(null);
-  const teamMembers = useTaskTeamMembers();
 
   const currentClientId = clientIds[selectedClient];
   const canManage = teamProfile?.accessLevel === "owner";
@@ -1543,7 +1487,7 @@ function WebsiteDevelopmentDashboard() {
       const query = supabase
         .from("website_tasks")
         .select(
-          "id, client_id, title, description, column_status, priority, live_url, assigned_to, assignee_usernames, created_at",
+          "id, client_id, title, description, column_status, priority, live_url, created_at",
         )
         .eq("client_id", currentClientId)
         .order("created_at", { ascending: true });
@@ -1561,10 +1505,6 @@ function WebsiteDevelopmentDashboard() {
         ...task,
         description: task.description ?? "",
         live_url: task.live_url ?? null,
-        assignee_usernames: normalizeAssigneeUsernames(
-          task.assignee_usernames,
-          task.assigned_to,
-        ),
         column_status: isColumnStatus(task.column_status)
           ? task.column_status
           : "needs_content",
@@ -1634,7 +1574,6 @@ function WebsiteDevelopmentDashboard() {
       title: string;
       description: string;
       priority: Priority;
-      assignedTo: string | null;
     },
   ) {
     if (!currentClientId || !canManage) return false;
@@ -1647,15 +1586,9 @@ function WebsiteDevelopmentDashboard() {
         description: values.description,
         column_status: columnStatus,
         priority: values.priority,
-        assigned_to: values.assignedTo,
-        assignee_usernames: values.assignedTo
-          ? [teamUsernameForName(values.assignedTo)].filter(
-              (username): username is string => Boolean(username),
-            )
-          : [],
       })
       .select(
-        "id, client_id, title, description, column_status, priority, live_url, assigned_to, assignee_usernames, created_at",
+        "id, client_id, title, description, column_status, priority, live_url, created_at",
       )
       .single();
 
@@ -1729,64 +1662,6 @@ function WebsiteDevelopmentDashboard() {
     setTasks((current) => current.filter((task) => task.id !== taskId));
     setSelectedTaskId(null);
     setErrorMessage(null);
-  }
-
-  function openPeoplePicker(task: WebsiteTask) {
-    if (!canManage) return;
-    setTaskToAssign(task);
-    setSelectedAssignees(task.assignee_usernames);
-    setAssignmentError(null);
-  }
-
-  function closePeoplePicker() {
-    if (isSavingAssignees) return;
-    setTaskToAssign(null);
-    setSelectedAssignees([]);
-    setAssignmentError(null);
-  }
-
-  function toggleAssignee(username: string) {
-    setSelectedAssignees((current) =>
-      current.includes(username)
-        ? current.filter((candidate) => candidate !== username)
-        : [...current, username],
-    );
-    setAssignmentError(null);
-  }
-
-  async function saveAssignees() {
-    if (!canManage || !taskToAssign || isSavingAssignees) return;
-    const taskId = taskToAssign.id;
-    const assignedTo = teamNameForUsername(selectedAssignees[0]);
-
-    setIsSavingAssignees(true);
-    setAssignmentError(null);
-    const { error } = await supabase
-      .from("website_tasks")
-      .update({
-        assignee_usernames: selectedAssignees,
-        assigned_to: assignedTo,
-      })
-      .eq("id", taskId);
-    setIsSavingAssignees(false);
-
-    if (error) {
-      setAssignmentError(`Could not save watchers: ${error.message}`);
-      return;
-    }
-
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              assignee_usernames: selectedAssignees,
-              assigned_to: assignedTo,
-            }
-          : task,
-      ),
-    );
-    closePeoplePicker();
   }
 
   return (
@@ -1950,9 +1825,6 @@ function WebsiteDevelopmentDashboard() {
                   key={task.id}
                   task={task}
                   onOpen={() => setSelectedTaskId(task.id)}
-                  canManage={canManage}
-                  members={teamMembers}
-                  onManagePeople={() => openPeoplePicker(task)}
                 />
               ))
             ) : (
@@ -1971,6 +1843,8 @@ function WebsiteDevelopmentDashboard() {
             )}
           </div>
         </section>
+
+        {requestedTaskId && <TaskItemsEditor taskId={requestedTaskId} />}
 
         <footer className="mt-6 flex flex-col gap-1 border-t border-[#E0D4E8] py-6 text-xs text-[#8B7895] sm:flex-row sm:justify-between">
           <p>Website development · Internal team workspace</p>
@@ -2009,18 +1883,6 @@ function WebsiteDevelopmentDashboard() {
         />
       )}
 
-      <TaskPeopleModal
-        open={Boolean(taskToAssign)}
-        taskTitle={taskToAssign?.title ?? ""}
-        members={teamMembers}
-        selectedUsernames={selectedAssignees}
-        mode="watching"
-        isSaving={isSavingAssignees}
-        error={assignmentError}
-        onToggle={toggleAssignee}
-        onClose={closePeoplePicker}
-        onSave={() => void saveAssignees()}
-      />
     </div>
   );
 }

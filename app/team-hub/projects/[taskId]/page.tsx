@@ -30,6 +30,7 @@ import { ContentBriefEditor } from "../_components/ContentBriefEditor";
 import { FigJamTaskBoard } from "../_components/FigJamTaskBoard";
 import { useProjectTheme } from "../_components/ProjectThemeProvider";
 import { SocialResearchLog } from "../_components/SocialResearchLog";
+import { TaskItemsEditor } from "../_components/TaskItemsEditor";
 
 type DivisionTask = {
   id: string;
@@ -289,6 +290,8 @@ export default function DivisionTaskDetailPage() {
             clientId={task.client_id}
           />
         )}
+
+        <TaskItemsEditor taskId={task.id} />
 
         {supportsFigJam && (
           <FigJamTaskBoard

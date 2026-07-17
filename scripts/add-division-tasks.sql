@@ -26,6 +26,10 @@ create table if not exists public.division_tasks (
   research_entries jsonb not null default '[]'::jsonb,
   figjam_embed_url text,
   assignee_usernames text[] not null default '{}'::text[],
+  watcher_usernames text[] not null default array[
+    'Understory_Karen',
+    'Understory_Adrian'
+  ]::text[],
   created_at timestamptz default now()
 );
 
@@ -40,6 +44,12 @@ alter table public.division_tasks
 alter table public.division_tasks
   add column if not exists assignee_usernames text[]
     not null default '{}'::text[];
+alter table public.division_tasks
+  add column if not exists watcher_usernames text[]
+    not null default array[
+      'Understory_Karen',
+      'Understory_Adrian'
+    ]::text[];
 
 update public.division_tasks
 set research_entries = '[]'::jsonb
@@ -430,6 +440,9 @@ create index if not exists division_tasks_client_division_created_at_idx
 
 create index if not exists division_tasks_assignee_usernames_idx
   on public.division_tasks using gin (assignee_usernames);
+
+create index if not exists division_tasks_watcher_usernames_idx
+  on public.division_tasks using gin (watcher_usernames);
 
 create index if not exists tasks_division_task_created_at_idx
   on public.tasks (division_task_id, created_at);

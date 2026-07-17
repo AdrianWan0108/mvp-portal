@@ -69,14 +69,12 @@ export function TaskPeopleButton({
   taskTitle,
   assigneeUsernames,
   members,
-  mode = "assignment",
   disabled = false,
   onClick,
 }: {
   taskTitle: string;
   assigneeUsernames: string[];
   members: TaskTeamMember[];
-  mode?: "assignment" | "watching";
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -86,14 +84,10 @@ export function TaskPeopleButton({
     )
     .filter((member): member is TaskTeamMember => Boolean(member));
   const label = assigneeUsernames.length
-    ? mode === "watching"
-      ? `${assigneeUsernames.length} watching`
-      : `${assigneeUsernames.length} ${
-          assigneeUsernames.length === 1 ? "person" : "people"
-        }`
-    : mode === "watching"
-      ? "Add watchers"
-      : "Assign people";
+    ? `${assigneeUsernames.length} ${
+        assigneeUsernames.length === 1 ? "person" : "people"
+      }`
+    : "Assign people";
 
   return (
     <button
@@ -129,7 +123,6 @@ export function TaskPeopleModal({
   taskTitle,
   members,
   selectedUsernames,
-  mode = "assignment",
   isSaving,
   error,
   onToggle,
@@ -140,7 +133,6 @@ export function TaskPeopleModal({
   taskTitle: string;
   members: TaskTeamMember[];
   selectedUsernames: string[];
-  mode?: "assignment" | "watching";
   isSaving: boolean;
   error: string | null;
   onToggle: (username: string) => void;
@@ -150,15 +142,13 @@ export function TaskPeopleModal({
   return (
     <TeamModal
       open={open}
-      title={mode === "watching" ? "Choose watchers" : "Assign or tag people"}
+      title="Assign or tag people"
       description={
         taskTitle
-          ? mode === "watching"
-            ? `Choose who should watch “${taskTitle}”.`
-            : `Choose everyone who should be tagged on “${taskTitle}”.`
+          ? `Choose everyone who should be tagged on “${taskTitle}”.`
           : undefined
       }
-      submitLabel={mode === "watching" ? "Save watchers" : "Save people"}
+      submitLabel="Save people"
       isSaving={isSaving}
       onClose={onClose}
       onSubmit={(event) => {
@@ -200,9 +190,7 @@ export function TaskPeopleModal({
           );
         })}
         <p className="text-xs leading-5 text-[#75647F]">
-          {mode === "watching"
-            ? "Leave everyone unchecked if nobody needs to watch this page."
-            : "Leave everyone unchecked to keep this task unassigned."}
+          Leave everyone unchecked to keep this task unassigned.
         </p>
       </div>
     </TeamModal>
