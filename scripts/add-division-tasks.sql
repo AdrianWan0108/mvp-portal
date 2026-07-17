@@ -61,6 +61,150 @@ alter table public.division_tasks
 alter table public.division_tasks
   alter column template_type set not null;
 
+-- Remove the two empty MVP placeholders created while Filming card was a
+-- standalone template. The UI text "No description yet." represents a null
+-- description in these rows.
+delete from public.division_tasks task
+using public.clients client
+where task.client_id = client.id
+  and client.slug = 'mvp'
+  and task.division = 'social-media'
+  and task.template_type = 'content_brief'
+  and lower(btrim(task.title)) = 'content brief'
+  and nullif(btrim(task.description), '') is null
+  and nullif(
+    btrim(task.content_brief_data->>'campaign_goal'),
+    ''
+  ) is null
+  and nullif(
+    btrim(task.content_brief_data->>'target_audience'),
+    ''
+  ) is null
+  and nullif(
+    btrim(task.content_brief_data->>'key_messages'),
+    ''
+  ) is null
+  and nullif(
+    btrim(task.content_brief_data->>'content_pillars'),
+    ''
+  ) is null
+  and nullif(btrim(task.content_brief_data->>'due_date'), '') is null
+  and nullif(
+    btrim(task.filming_card_data->>'source_reference_id'),
+    ''
+  ) is null
+  and exists (
+    select 1
+    from public.division_tasks filming
+    where filming.client_id = task.client_id
+      and filming.division = 'social-media'
+      and filming.template_type = 'filming_card'
+      and lower(btrim(filming.title)) = 'filming card'
+      and nullif(btrim(filming.description), '') is null
+      and nullif(
+        btrim(filming.filming_card_data->>'source_reference_id'),
+        ''
+      ) is null
+  );
+
+delete from public.division_tasks task
+using public.clients client
+where task.client_id = client.id
+  and client.slug = 'mvp'
+  and task.division = 'social-media'
+  and task.template_type = 'filming_card'
+  and lower(btrim(task.title)) = 'filming card'
+  and nullif(btrim(task.description), '') is null
+  and nullif(btrim(task.filming_card_data->>'source_reference_id'), '')
+    is null
+  and nullif(btrim(task.filming_card_data->>'filming_date'), '') is null
+  and coalesce(task.filming_card_data->'participants', '[]'::jsonb)
+    = '[]'::jsonb
+  and coalesce(
+    (task.filming_card_data->>'needs_models')::boolean,
+    false
+  ) = false
+  and nullif(btrim(task.filming_card_data->>'script'), '') is null
+  and nullif(btrim(task.filming_card_data->>'prep_work'), '') is null
+  and nullif(btrim(task.filming_card_data->>'footage_drive_link'), '')
+    is null
+  and coalesce(
+    (task.filming_card_data->>'filmed')::boolean,
+    false
+  ) = false;
+
+-- Filming now belongs inside Content brief. If an older filming task points
+-- to a reference URL already mentioned by a Content brief, merge its filming
+-- data into that brief. Otherwise preserve the work by converting the row
+-- itself into a Content brief.
+do $filming_migration$
+declare
+  filming_task record;
+  matching_brief_id uuid;
+  source_url text;
+begin
+  for filming_task in
+    select *
+    from public.division_tasks
+    where template_type = 'filming_card'
+  loop
+    source_url := nullif(
+      btrim(filming_task.filming_card_data->>'source_reference_url'),
+      ''
+    );
+    matching_brief_id := null;
+
+    if source_url is not null then
+      select brief.id
+      into matching_brief_id
+      from public.division_tasks brief
+      where brief.client_id = filming_task.client_id
+        and brief.division = filming_task.division
+        and brief.template_type = 'content_brief'
+        and position(
+          source_url in coalesce(brief.description, '')
+        ) > 0
+      order by brief.created_at desc
+      limit 1;
+    end if;
+
+    if matching_brief_id is not null then
+      update public.division_tasks
+      set filming_card_data = filming_task.filming_card_data
+      where id = matching_brief_id;
+
+      delete from public.division_tasks
+      where id = filming_task.id;
+    else
+      update public.division_tasks
+      set
+        template_type = 'content_brief',
+        title = case
+          when title ~* '^Filming[[:space:]]+—[[:space:]]+'
+            then regexp_replace(
+              title,
+              '^Filming[[:space:]]+—[[:space:]]+',
+              'Content brief — ',
+              'i'
+            )
+          when lower(btrim(title)) = 'filming card'
+            then 'Content brief — Filming plan'
+          else title
+        end,
+        description = coalesce(
+          nullif(btrim(description), ''),
+          'Filming plan created from social media research.'
+        ),
+        content_brief_data = coalesce(
+          content_brief_data,
+          '{}'::jsonb
+        )
+      where id = filming_task.id;
+    end if;
+  end loop;
+end
+$filming_migration$;
+
 alter table public.division_tasks
   drop constraint if exists division_tasks_template_type_check;
 alter table public.division_tasks
@@ -71,7 +215,6 @@ alter table public.division_tasks
       'content_brief',
       'content_calendar',
       'analytics_results_hub',
-      'filming_card',
       'website_dashboard'
     )
   );
@@ -82,7 +225,10 @@ alter table public.division_tasks
   add constraint division_tasks_filming_card_data_check
   check (
     filming_card_data is null
-    or jsonb_typeof(filming_card_data) = 'object'
+    or (
+      template_type = 'content_brief'
+      and jsonb_typeof(filming_card_data) = 'object'
+    )
   );
 
 alter table public.tasks

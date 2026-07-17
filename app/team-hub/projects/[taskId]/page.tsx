@@ -27,7 +27,6 @@ import {
   type WorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { ContentBriefEditor } from "../_components/ContentBriefEditor";
-import { FilmingCardEditor } from "../_components/FilmingCardEditor";
 import { FigJamTaskBoard } from "../_components/FigJamTaskBoard";
 import { useProjectTheme } from "../_components/ProjectThemeProvider";
 import { SocialResearchLog } from "../_components/SocialResearchLog";
@@ -277,16 +276,9 @@ export default function DivisionTaskDetailPage() {
           <ContentBriefEditor
             key={task.id}
             taskId={task.id}
-            initialData={task.content_brief_data}
-          />
-        )}
-
-        {task.template_type === "filming_card" && (
-          <FilmingCardEditor
-            key={task.id}
-            taskId={task.id}
             clientSlug={clientSlug}
-            initialData={task.filming_card_data}
+            initialData={task.content_brief_data}
+            initialFilmingData={task.filming_card_data}
           />
         )}
 

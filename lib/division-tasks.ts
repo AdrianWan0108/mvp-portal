@@ -40,7 +40,6 @@ export const DIVISION_TASK_TEMPLATES = [
   "content_brief",
   "content_calendar",
   "analytics_results_hub",
-  "filming_card",
   "website_dashboard",
 ] as const;
 

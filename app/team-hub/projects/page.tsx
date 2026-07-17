@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ClientSelect } from "@/app/_components/ClientSelect";
+import { useTeamIdentity } from "@/app/team-hub/_components/TeamIdentity";
 import {
   DIVISIONS,
   DIVISION_DESCRIPTIONS,
@@ -10,7 +11,6 @@ import {
   DIVISION_TASK_STATUSES,
   DIVISION_TASK_STATUS_DETAILS,
   EMPTY_CONTENT_BRIEF_DATA,
-  EMPTY_FILMING_CARD_DATA,
   specializedDivisionHref,
   type Division,
   type DivisionTaskStatus,
@@ -68,13 +68,6 @@ const socialMediaTemplates: TemplateOption[] = [
     description:
       "Create an empty post-and-slide review workspace using the existing calendar structure.",
     defaultTitle: "Content calendar",
-  },
-  {
-    id: "filming_card",
-    label: "Filming card",
-    description:
-      "Coordinate participants, filming date, script, prep, and footage.",
-    defaultTitle: "Filming card",
   },
   {
     id: "analytics_results_hub",
@@ -170,6 +163,8 @@ function ClientMark({ client }: { client: WorkspaceClientSlug }) {
 }
 
 export default function TeamHubProjectsPage() {
+  const { accessLevel, isReady: isIdentityReady } = useTeamIdentity();
+  const isOwner = isIdentityReady && accessLevel === "owner";
   const [division, setDivision] = useState<Division>("social-media");
   const { client, isReady: isClientReady, setClient } = useProjectTheme();
   const [clientId, setClientId] = useState<string | null>(null);
@@ -184,6 +179,10 @@ export default function TeamHubProjectsPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<DivisionTaskStatus>("planning");
+  const [taskToDelete, setTaskToDelete] = useState<DivisionTask | null>(
+    null,
+  );
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const clientOptions = WORKSPACE_CLIENT_SLUGS.map((slug) => ({
     value: slug,
@@ -283,10 +282,7 @@ export default function TeamHubProjectsPage() {
           selectedTemplate === "content_brief"
             ? EMPTY_CONTENT_BRIEF_DATA
             : null,
-        filming_card_data:
-          selectedTemplate === "filming_card"
-            ? EMPTY_FILMING_CARD_DATA
-            : null,
+        filming_card_data: null,
         research_entries: [],
       })
       .select(
@@ -304,6 +300,28 @@ export default function TeamHubProjectsPage() {
 
     setTasks((current) => [data as DivisionTask, ...current]);
     closeTaskModal();
+  }
+
+  async function deleteTask() {
+    if (!isOwner || !taskToDelete || isDeleting) return;
+
+    setIsDeleting(true);
+    setError(null);
+    const { error: deleteError } = await supabase
+      .from("division_tasks")
+      .delete()
+      .eq("id", taskToDelete.id);
+    setIsDeleting(false);
+
+    if (deleteError) {
+      setError(`Could not delete the task: ${deleteError.message}`);
+      return;
+    }
+
+    setTasks((current) =>
+      current.filter((task) => task.id !== taskToDelete.id),
+    );
+    setTaskToDelete(null);
   }
 
   return (
@@ -430,38 +448,54 @@ export default function TeamHubProjectsPage() {
                   specializedHref ?? `/team-hub/projects/${task.id}`;
 
                 return (
-                  <Link
+                  <article
                     key={task.id}
-                    href={href}
-                    className="group flex min-h-48 flex-col rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-[0_8px_24px_rgba(40,50,55,0.045)] transition hover:-translate-y-1 hover:border-[var(--primary)] hover:shadow-[0_14px_34px_rgba(40,50,55,0.1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+                    className="group flex min-h-48 flex-col overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--card)] shadow-[0_8px_24px_rgba(40,50,55,0.045)] transition hover:-translate-y-1 hover:border-[var(--primary)] hover:shadow-[0_14px_34px_rgba(40,50,55,0.1)]"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      {task.template_type === "analytics_results_hub" ? (
-                        <span className="rounded-full border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--foreground)]">
-                          Research log
+                    <Link
+                      href={href}
+                      className="flex flex-1 flex-col p-5 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-[var(--ring)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        {task.template_type ===
+                        "analytics_results_hub" ? (
+                          <span className="rounded-full border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--foreground)]">
+                            Research log
+                          </span>
+                        ) : (
+                          <StatusBadge status={task.status} />
+                        )}
+                        <span
+                          aria-hidden="true"
+                          className="text-[var(--muted-foreground)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]"
+                        >
+                          →
                         </span>
-                      ) : (
-                        <StatusBadge status={task.status} />
-                      )}
-                      <span
-                        aria-hidden="true"
-                        className="text-[var(--muted-foreground)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]"
-                      >
-                        →
-                      </span>
-                    </div>
-                    <h3 className="mt-5 text-lg font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-                      {task.title}
-                    </h3>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--muted-foreground)]">
-                      {task.description || "No description yet."}
-                    </p>
-                    <p className="mt-auto pt-5 text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--primary)]">
-                      {specializedHref
-                        ? `Open ${DIVISION_LABELS[task.division]} workspace`
-                        : "Open task details"}
-                    </p>
-                  </Link>
+                      </div>
+                      <h3 className="mt-5 text-lg font-semibold tracking-[-0.02em] text-[var(--foreground)]">
+                        {task.title}
+                      </h3>
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--muted-foreground)]">
+                        {task.description || "No description yet."}
+                      </p>
+                      <p className="mt-auto pt-5 text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--primary)]">
+                        {specializedHref
+                          ? `Open ${DIVISION_LABELS[task.division]} workspace`
+                          : "Open task details"}
+                      </p>
+                    </Link>
+                    {isOwner && (
+                      <div className="border-t border-[var(--border)] px-5 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setTaskToDelete(task)}
+                          className="text-xs font-semibold text-[#9A4040] underline decoration-transparent underline-offset-4 transition hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9A4040]"
+                        >
+                          Delete task
+                        </button>
+                      </div>
+                    )}
+                  </article>
                 );
               })}
             </div>
@@ -569,6 +603,31 @@ export default function TeamHubProjectsPage() {
             </label>
           )}
         </div>
+      </TeamModal>
+
+      <TeamModal
+        open={Boolean(taskToDelete)}
+        title="Delete task?"
+        description={
+          taskToDelete
+            ? `This will permanently delete “${taskToDelete.title}” and its linked task data.`
+            : undefined
+        }
+        submitLabel="Delete task"
+        isSaving={isDeleting}
+        themed
+        onClose={() => {
+          if (!isDeleting) setTaskToDelete(null);
+        }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void deleteTask();
+        }}
+      >
+        <p className="rounded-xl border border-[#E4B9B9] bg-[#FFF0F0] px-4 py-3 text-sm leading-6 text-[#8B3E3E]">
+          This action cannot be undone. Staff members do not have access to
+          this control.
+        </p>
       </TeamModal>
     </main>
   );

@@ -88,7 +88,7 @@ function FootagePreview({ link }: { link: string }) {
   );
 }
 
-export function FilmingCardEditor({
+export function FilmingDetailsEditor({
   taskId,
   clientSlug,
   initialData,
@@ -100,6 +100,14 @@ export function FilmingCardEditor({
   const [card, setCard] = useState<FilmingCardData>(() =>
     normalizeFilmingCardData(initialData),
   );
+  const [hasFilmingDetails, setHasFilmingDetails] = useState(
+    Boolean(
+      initialData &&
+        typeof initialData === "object" &&
+        !Array.isArray(initialData),
+    ),
+  );
+  const [isExpanded, setIsExpanded] = useState(hasFilmingDetails);
   const [sourceReference, setSourceReference] =
     useState<SourceReference | null>(null);
   const [customParticipant, setCustomParticipant] = useState("");
@@ -199,37 +207,106 @@ export function FilmingCardEditor({
     if (error) {
       setMessage({
         tone: "error",
-        text: `Could not save the filming card: ${error.message}`,
+        text: `Could not save filming details: ${error.message}`,
       });
       return;
     }
 
     setCard(normalizedCard);
-    setMessage({ tone: "success", text: "Filming card saved." });
+    setHasFilmingDetails(true);
+    setMessage({ tone: "success", text: "Filming details saved." });
+  }
+
+  if (!hasFilmingDetails) {
+    return (
+      <section className="mt-6 rounded-[20px] border border-dashed border-[var(--border)] bg-[var(--background)] p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-[var(--foreground)]">
+              Filming
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
+              Add production details if this content brief needs a shoot.
+            </p>
+          </div>
+          <TeamButton
+            type="button"
+            themed
+            tone="secondary"
+            onClick={() => {
+              setHasFilmingDetails(true);
+              setIsExpanded(true);
+            }}
+          >
+            + Add filming details
+          </TeamButton>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isExpanded) {
+    return (
+      <section className="mt-6 rounded-[20px] border border-[var(--border)] bg-[var(--background)] p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-[var(--foreground)]">
+              Filming
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
+              {card.filmed
+                ? "Filming completed."
+                : card.filming_date
+                  ? `Scheduled for ${card.filming_date}.`
+                  : "Filming details have been added."}
+            </p>
+          </div>
+          <TeamButton
+            type="button"
+            themed
+            tone="secondary"
+            onClick={() => setIsExpanded(true)}
+          >
+            Expand filming details
+          </TeamButton>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <section className="mt-8 rounded-[24px] border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
+    <section className="mt-6 rounded-[20px] border border-[var(--border)] bg-[var(--background)] p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
-            Production template
+            Optional production details
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-[var(--foreground)]">
-            Filming card
-          </h2>
+          <h3 className="mt-2 text-lg font-semibold text-[var(--foreground)]">
+            Filming
+          </h3>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
             Coordinate the shoot, prep, participants, and finished footage.
           </p>
         </div>
-        <TeamButton
-          type="button"
-          themed
-          disabled={isSaving}
-          onClick={() => void saveCard()}
-        >
-          {isSaving ? "Saving…" : "Save filming card"}
-        </TeamButton>
+        <div className="flex flex-wrap gap-2">
+          <TeamButton
+            type="button"
+            themed
+            tone="secondary"
+            disabled={isSaving}
+            onClick={() => setIsExpanded(false)}
+          >
+            Collapse
+          </TeamButton>
+          <TeamButton
+            type="button"
+            themed
+            disabled={isSaving}
+            onClick={() => void saveCard()}
+          >
+            {isSaving ? "Saving…" : "Save filming details"}
+          </TeamButton>
+        </div>
       </div>
 
       {message && (

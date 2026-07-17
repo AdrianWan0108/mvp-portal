@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTeamIdentity } from "@/app/team-hub/_components/TeamIdentity";
+import { EMPTY_CONTENT_BRIEF_DATA } from "@/lib/division-tasks";
 import {
   SOCIAL_CONTENT_TYPES,
   SOCIAL_CONTENT_TYPE_LABELS,
@@ -290,44 +291,83 @@ export function SocialResearchLog({
           SOCIAL_POST_FORMAT_LABELS[entry.format]
         }`
       : `Social media ${SOCIAL_POST_FORMAT_LABELS[entry.format]}`;
+    const filmingData = {
+      filming_date: "",
+      participants: [],
+      needs_models: false,
+      script: entry.hook_explanation || entry.storytelling_approach || "",
+      prep_work: "",
+      footage_drive_link: "",
+      filmed: false,
+      source_reference_id: entry.id,
+      source_reference_url: entry.reference_link,
+    };
 
-    const { data, error } = await supabase
+    const { data: existingBrief, error: lookupError } = await supabase
+      .from("division_tasks")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("division", "social-media")
+      .eq("template_type", "content_brief")
+      .contains("filming_card_data", {
+        source_reference_id: entry.id,
+      })
+      .limit(1)
+      .maybeSingle();
+
+    if (lookupError) {
+      setPlanningEntryId(null);
+      setMessage(
+        `Could not check for an existing content brief: ${lookupError.message}`,
+      );
+      return;
+    }
+
+    if (existingBrief) {
+      const { error: updateError } = await supabase
+        .from("division_tasks")
+        .update({ filming_card_data: filmingData })
+        .eq("id", existingBrief.id);
+
+      setPlanningEntryId(null);
+      if (updateError) {
+        setMessage(
+          `Could not update the content brief: ${updateError.message}`,
+        );
+        return;
+      }
+
+      router.push(`/team-hub/projects/${existingBrief.id}`);
+      return;
+    }
+
+    const { data: newBrief, error } = await supabase
       .from("division_tasks")
       .insert({
         client_id: clientId,
         division: "social-media",
-        title: `Filming — ${titleDescriptor}`,
-        description: "Production plan created from social media research.",
+        title: `Content brief — ${titleDescriptor}`,
+        description: "Filming plan created from social media research.",
         status: "planning",
-        template_type: "filming_card",
-        filming_card_data: {
-          filming_date: "",
-          participants: [],
-          needs_models: false,
-          script:
-            entry.hook_explanation || entry.storytelling_approach || "",
-          prep_work: "",
-          footage_drive_link: "",
-          filmed: false,
-          source_reference_id: entry.id,
-          source_reference_url: entry.reference_link,
-        },
+        template_type: "content_brief",
+        content_brief_data: EMPTY_CONTENT_BRIEF_DATA,
+        filming_card_data: filmingData,
         research_entries: [],
       })
       .select("id")
       .single();
 
     setPlanningEntryId(null);
-    if (error || !data) {
+    if (error || !newBrief) {
       setMessage(
-        `Could not create the filming card: ${
+        `Could not create the content brief: ${
           error?.message ?? "No task returned."
         }`,
       );
       return;
     }
 
-    router.push(`/team-hub/projects/${data.id}`);
+    router.push(`/team-hub/projects/${newBrief.id}`);
   }
 
   return (
@@ -454,7 +494,7 @@ export function SocialResearchLog({
                             onClick={() => void planToShoot(entry)}
                           >
                             {planningEntryId === entry.id
-                              ? "Creating filming card…"
+                              ? "Preparing content brief…"
                               : "Plan to shoot"}
                           </TeamButton>
                         )}

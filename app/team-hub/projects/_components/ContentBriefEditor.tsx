@@ -7,14 +7,20 @@ import {
 } from "@/lib/division-tasks";
 import { projectInputClass } from "@/lib/project-client-theme";
 import { supabase } from "@/lib/supabase";
+import type { WorkspaceClientSlug } from "@/lib/workspace-clients";
 import { TeamButton } from "../../_components/TeamHubUi";
+import { FilmingDetailsEditor } from "./FilmingDetailsEditor";
 
 export function ContentBriefEditor({
   taskId,
+  clientSlug,
   initialData,
+  initialFilmingData,
 }: {
   taskId: string;
+  clientSlug: WorkspaceClientSlug;
   initialData: unknown;
+  initialFilmingData: unknown;
 }) {
   const [brief, setBrief] = useState<ContentBriefData>(() =>
     normalizeContentBriefData(initialData),
@@ -150,6 +156,12 @@ export function ContentBriefEditor({
           />
         </label>
       </div>
+
+      <FilmingDetailsEditor
+        taskId={taskId}
+        clientSlug={clientSlug}
+        initialData={initialFilmingData}
+      />
     </section>
   );
 }
