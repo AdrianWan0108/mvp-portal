@@ -14,6 +14,7 @@ import {
   type TeamAccessLevel,
   type TeamIdentity,
 } from "@/lib/team-auth";
+import { supabase } from "@/lib/supabase";
 
 export {
   TEAM_IDENTITIES,
@@ -33,6 +34,8 @@ type TeamIdentityContextValue = {
   name: string | null;
   title: string | null;
   accessLevel: TeamAccessLevel | null;
+  avatarUrl: string | null;
+  displayName: string | null;
   isReady: boolean;
   isPickerOpen: boolean;
   selectIdentity: (identity: TeamIdentity) => void;
@@ -125,6 +128,11 @@ export function TeamIdentityProvider({
   children: React.ReactNode;
 }) {
   const [identity, setIdentity] = useState<TeamIdentity | null>(null);
+  const [syncedProfile, setSyncedProfile] = useState<{
+    identity: TeamIdentity;
+    avatarUrl: string | null;
+    displayName: string | null;
+  } | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
@@ -143,8 +151,43 @@ export function TeamIdentityProvider({
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    if (!identity) return;
+    let isActive = true;
+    const activeIdentity = identity;
+
+    async function loadSyncedProfile() {
+      const { data, error } = await supabase
+        .from("team_profile_directory")
+        .select("avatar_url, slack_display_name")
+        .eq("team_username", TEAM_IDENTITIES[activeIdentity].username)
+        .maybeSingle();
+
+      if (!isActive) return;
+      if (error) {
+        console.warn("Could not load the synced team profile", error.message);
+        return;
+      }
+
+      setSyncedProfile({
+        identity: activeIdentity,
+        avatarUrl: data?.avatar_url ?? null,
+        displayName: data?.slack_display_name ?? null,
+      });
+    }
+
+    void loadSyncedProfile();
+    return () => {
+      isActive = false;
+    };
+  }, [identity]);
+
   const value = useMemo<TeamIdentityContextValue>(() => {
     const profile = identity ? TEAM_IDENTITIES[identity] : null;
+    const activeSyncedProfile =
+      identity && syncedProfile?.identity === identity
+        ? syncedProfile
+        : null;
 
     return {
       identity,
@@ -152,6 +195,8 @@ export function TeamIdentityProvider({
       name: profile?.name ?? null,
       title: profile?.title ?? null,
       accessLevel: profile?.accessLevel ?? null,
+      avatarUrl: activeSyncedProfile?.avatarUrl ?? null,
+      displayName: activeSyncedProfile?.displayName ?? null,
       isReady,
       isPickerOpen,
       selectIdentity: (nextIdentity) => {
@@ -165,7 +210,7 @@ export function TeamIdentityProvider({
         setIsPickerOpen(true);
       },
     };
-  }, [identity, isPickerOpen, isReady]);
+  }, [identity, isPickerOpen, isReady, syncedProfile]);
 
   return (
     <TeamIdentityContext.Provider value={value}>

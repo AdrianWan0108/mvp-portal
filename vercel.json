@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/sync-slack-profiles",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

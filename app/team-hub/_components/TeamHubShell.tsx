@@ -167,7 +167,7 @@ function IdentityIndicator({
   identity: TeamIdentity;
   compact?: boolean;
 }) {
-  const { openIdentityPicker } = useTeamIdentity();
+  const { avatarUrl, displayName, openIdentityPicker } = useTeamIdentity();
   const profile = TEAM_IDENTITIES[identity];
 
   return (
@@ -176,9 +176,19 @@ function IdentityIndicator({
         compact ? "gap-2 px-2.5 py-2" : "gap-2.5 px-3 py-2.5"
       }`}
     >
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#341F60] text-[10px] font-semibold text-white">
-        {profile.initials}
-      </span>
+      {avatarUrl ? (
+        <Image
+          src={avatarUrl}
+          alt={displayName || profile.name}
+          width={28}
+          height={28}
+          className="size-7 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#341F60] text-[10px] font-semibold text-white">
+          {profile.initials}
+        </span>
+      )}
       <span className="min-w-0">
         {!compact && (
           <span className="block text-[9px] uppercase tracking-[0.13em] text-[#8B7895]">
@@ -186,7 +196,7 @@ function IdentityIndicator({
           </span>
         )}
         <span className="block truncate text-[10px] font-semibold text-[#341F60] sm:text-xs">
-          {profile.name} · {profile.title}
+          {displayName || profile.name} · {profile.title}
         </span>
       </span>
       <button
