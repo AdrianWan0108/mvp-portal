@@ -21,10 +21,21 @@ import {
   teamInputClass,
 } from "@/app/team-hub/_components/TeamHubUi";
 import {
+  TaskPeopleButton,
+  TaskPeopleModal,
+  useTaskTeamMembers,
+  type TaskTeamMember,
+} from "@/app/team-hub/projects/_components/TaskPeoplePicker";
+import {
   WORKSPACE_CLIENTS,
   isWorkspaceClientSlug,
 } from "@/lib/workspace-clients";
 import { sendSlackNotification } from "@/lib/slack-notifications";
+import {
+  normalizeAssigneeUsernames,
+  teamNameForUsername,
+  teamUsernameForName,
+} from "@/lib/team-assignments";
 import {
   EMPTY_REEL_DETAILS,
   PROJECT_ASSIGNEES,
@@ -64,6 +75,7 @@ type Post = {
   visualNote: string;
   reelDetails: ReelDetails;
   assignedTo: string | null;
+  assigneeUsernames: string[];
   slides: Slide[];
 };
 
@@ -87,6 +99,7 @@ type TaskRow = {
   visual_note: string | null;
   reel_details: unknown;
   assigned_to: string | null;
+  assignee_usernames: string[] | null;
   created_at: string;
   task_slides: TaskSlideRow[] | null;
 };
@@ -109,6 +122,10 @@ function mapTaskRows(rows: TaskRow[]): Post[] {
     visualNote: task.visual_note ?? "",
     reelDetails: normalizeReelDetails(task.reel_details),
     assignedTo: task.assigned_to,
+    assigneeUsernames: normalizeAssigneeUsernames(
+      task.assignee_usernames,
+      task.assigned_to,
+    ),
     slides: (task.task_slides ?? [])
       .sort((a, b) => a.slide_number - b.slide_number)
       .map((slide) => ({
@@ -382,7 +399,8 @@ function PostCard({
   onCancelSubmission,
   onOpen,
   canManage,
-  onAssign,
+  members,
+  onManagePeople,
   onEdit,
   onDelete,
   confirmDelete,
@@ -393,7 +411,8 @@ function PostCard({
   onCancelSubmission: () => void;
   onOpen: () => void;
   canManage: boolean;
-  onAssign: (assignedTo: string | null) => void;
+  members: TaskTeamMember[];
+  onManagePeople: () => void;
   onEdit: () => void;
   onDelete: () => void;
   confirmDelete: boolean;
@@ -483,19 +502,12 @@ function PostCard({
         <div className="relative z-20 mt-4 flex flex-wrap items-center gap-2">
           {canManage ? (
             <>
-              <select
-                aria-label={`Assign ${post.title} to`}
-                value={post.assignedTo ?? ""}
-                onChange={(event) => onAssign(event.target.value || null)}
-                className="min-w-0 flex-1 rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698]"
-              >
-                <option value="">Unassigned</option>
-                {PROJECT_ASSIGNEES.map((assignee) => (
-                  <option key={assignee} value={assignee}>
-                    {assignee}
-                  </option>
-                ))}
-              </select>
+              <TaskPeopleButton
+                taskTitle={post.title}
+                assigneeUsernames={post.assigneeUsernames}
+                members={members}
+                onClick={onManagePeople}
+              />
               <TeamButton type="button" tone="secondary" onClick={onEdit}>
                 Edit
               </TeamButton>
@@ -504,9 +516,13 @@ function PostCard({
               </TeamButton>
             </>
           ) : (
-            <span className="text-[11px] font-medium text-[#8B7895]">
-              Assigned to {post.assignedTo}
-            </span>
+            <TaskPeopleButton
+              taskTitle={post.title}
+              assigneeUsernames={post.assigneeUsernames}
+              members={members}
+              disabled
+              onClick={() => undefined}
+            />
           )}
         </div>
       </div>
@@ -1058,23 +1074,25 @@ function PostEditorModal({
                 ))}
               </select>
             </label>
-            <label className="text-xs font-semibold text-[#341F60]">
-              Assign to
-              <select
-                value={editor.assignedTo}
-                onChange={(event) =>
-                  onChange({ ...editor, assignedTo: event.target.value })
-                }
-                className={`mt-2 ${teamInputClass}`}
-              >
-                <option value="">Unassigned</option>
-                {PROJECT_ASSIGNEES.map((assignee) => (
-                  <option key={assignee} value={assignee}>
-                    {assignee}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {!editor.post && (
+              <label className="text-xs font-semibold text-[#341F60]">
+                Initial assignee
+                <select
+                  value={editor.assignedTo}
+                  onChange={(event) =>
+                    onChange({ ...editor, assignedTo: event.target.value })
+                  }
+                  className={`mt-2 ${teamInputClass}`}
+                >
+                  <option value="">Unassigned</option>
+                  {PROJECT_ASSIGNEES.map((assignee) => (
+                    <option key={assignee} value={assignee}>
+                      {assignee}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         </div>
       )}
@@ -1111,12 +1129,18 @@ function AugustContentCalendarContent() {
     "Open a post to review the copy, visual direction, and captions for every slide.",
   );
   const [teamProfile, setTeamProfile] = useState<{
+    username: string;
     name: string;
     accessLevel: TeamAccessLevel;
   } | null>(null);
   const [isTeamProfileReady, setIsTeamProfileReady] = useState(false);
   const [editor, setEditor] = useState<PostEditorState | null>(null);
   const [isSavingPost, setIsSavingPost] = useState(false);
+  const [postToAssign, setPostToAssign] = useState<Post | null>(null);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [isSavingAssignees, setIsSavingAssignees] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const teamMembers = useTaskTeamMembers();
   const [deletePostId, setDeletePostId] = useState<number | null>(null);
   const [postRailState, setPostRailState] = useState({
     canScrollLeft: false,
@@ -1133,7 +1157,11 @@ function AugustContentCalendarContent() {
       const profile = readTeamSessionProfile();
       setTeamProfile(
         profile
-          ? { name: profile.name, accessLevel: profile.accessLevel }
+          ? {
+              username: profile.username,
+              name: profile.name,
+              accessLevel: profile.accessLevel,
+            }
           : null,
       );
       setIsTeamProfileReady(true);
@@ -1256,6 +1284,7 @@ function AugustContentCalendarContent() {
             visual_note,
             reel_details,
             assigned_to,
+            assignee_usernames,
             created_at,
             task_slides (
               id,
@@ -1274,7 +1303,7 @@ function AugustContentCalendarContent() {
         ? query.eq("division_task_id", activeCalendarId)
         : query.is("division_task_id", null);
       if (activeProfile.accessLevel === "staff") {
-        query = query.eq("assigned_to", activeProfile.name);
+        query = query.contains("assignee_usernames", [activeProfile.username]);
       }
       const { data, error } = await query;
 
@@ -1470,35 +1499,64 @@ function AugustContentCalendarContent() {
     setErrorMessage(null);
   }
 
-  async function assignPost(postId: number, assignedTo: string | null) {
+  function openPeoplePicker(post: Post) {
     if (!canManage) return;
-    const post = posts.find((candidate) => candidate.id === postId);
-    if (!post) return;
-    const previous = post.assignedTo;
-    setPosts((current) =>
-      current.map((candidate) =>
-        candidate.id === postId
-          ? { ...candidate, assignedTo }
-          : candidate,
-      ),
+    setPostToAssign(post);
+    setSelectedAssignees(post.assigneeUsernames);
+    setAssignmentError(null);
+  }
+
+  function closePeoplePicker() {
+    if (isSavingAssignees) return;
+    setPostToAssign(null);
+    setSelectedAssignees([]);
+    setAssignmentError(null);
+  }
+
+  function toggleAssignee(username: string) {
+    setSelectedAssignees((current) =>
+      current.includes(username)
+        ? current.filter((candidate) => candidate !== username)
+        : [...current, username],
     );
+    setAssignmentError(null);
+  }
+
+  async function saveAssignees() {
+    if (!canManage || !postToAssign || isSavingAssignees) return;
+    const postId = postToAssign.id;
+    const databaseId = postToAssign.databaseId;
+    const assignedTo = teamNameForUsername(selectedAssignees[0]);
+
+    setIsSavingAssignees(true);
+    setAssignmentError(null);
     const { error } = await supabase
       .from("tasks")
       .update({
+        assignee_usernames: selectedAssignees,
         assigned_to: assignedTo,
         assignee: assignedTo ?? "Unassigned",
       })
-      .eq("id", post.databaseId);
+      .eq("id", databaseId);
+    setIsSavingAssignees(false);
+
     if (error) {
-      setPosts((current) =>
-        current.map((candidate) =>
-          candidate.id === postId
-            ? { ...candidate, assignedTo: previous }
-            : candidate,
-        ),
-      );
-      setErrorMessage(`Could not reassign the task: ${error.message}`);
+      setAssignmentError(`Could not save people: ${error.message}`);
+      return;
     }
+
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              assigneeUsernames: selectedAssignees,
+              assignedTo,
+            }
+          : post,
+      ),
+    );
+    closePeoplePicker();
   }
 
   function openPostEditor(post?: Post) {
@@ -1519,6 +1577,7 @@ function AugustContentCalendarContent() {
   async function savePost() {
     if (!canManage || !editor || !clientId || !editor.title.trim()) return;
     setIsSavingPost(true);
+    const initialUsername = teamUsernameForName(editor.assignedTo);
     const payload = {
       client_id: clientId,
       title: editor.title.trim(),
@@ -1535,9 +1594,14 @@ function AugustContentCalendarContent() {
             }
           : null,
       status: editor.status,
-      assigned_to: editor.assignedTo || null,
-      assignee: editor.assignedTo || "Unassigned",
       division_task_id: calendarTaskId,
+      ...(editor.post
+        ? {}
+        : {
+            assigned_to: editor.assignedTo || null,
+            assignee_usernames: initialUsername ? [initialUsername] : [],
+            assignee: editor.assignedTo || "Unassigned",
+          }),
     };
     const mutation = editor.post
       ? supabase
@@ -1685,9 +1749,8 @@ function AugustContentCalendarContent() {
                       }
                       onOpen={() => setSelectedPostId(post.id)}
                       canManage={canManage}
-                      onAssign={(assignedTo) =>
-                        void assignPost(post.id, assignedTo)
-                      }
+                      members={teamMembers}
+                      onManagePeople={() => openPeoplePicker(post)}
                       onEdit={() => openPostEditor(post)}
                       onDelete={() => void deletePost(post)}
                       confirmDelete={deletePostId === post.id}
@@ -1766,6 +1829,17 @@ function AugustContentCalendarContent() {
         onChange={setEditor}
         onClose={() => setEditor(null)}
         onSave={() => void savePost()}
+      />
+      <TaskPeopleModal
+        open={Boolean(postToAssign)}
+        taskTitle={postToAssign?.title ?? ""}
+        members={teamMembers}
+        selectedUsernames={selectedAssignees}
+        isSaving={isSavingAssignees}
+        error={assignmentError}
+        onToggle={toggleAssignee}
+        onClose={closePeoplePicker}
+        onSave={() => void saveAssignees()}
       />
     </div>
   );

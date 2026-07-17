@@ -16,7 +16,17 @@ import {
 } from "@/lib/workspace-clients";
 import { sendSlackNotification } from "@/lib/slack-notifications";
 import { PROJECT_ASSIGNEES } from "@/lib/social-content";
+import {
+  normalizeAssigneeUsernames,
+  teamNameForUsername,
+  teamUsernameForName,
+} from "@/lib/team-assignments";
 import { useOptionalProjectTheme } from "@/app/team-hub/projects/_components/ProjectThemeProvider";
+import {
+  TaskPeopleButton,
+  TaskPeopleModal,
+  useTaskTeamMembers,
+} from "@/app/team-hub/projects/_components/TaskPeoplePicker";
 import { UnderstoryBrand } from "../_components/UnderstoryBrand";
 
 type ClientSlug = WorkspaceClientSlug;
@@ -40,6 +50,7 @@ type WebsiteTask = {
   priority: Priority;
   live_url: string | null;
   assigned_to: string | null;
+  assignee_usernames: string[];
   created_at: string;
 };
 
@@ -273,12 +284,14 @@ function TaskListRow({
   task,
   onOpen,
   canManage,
-  onAssign,
+  members,
+  onManagePeople,
 }: {
   task: WebsiteTask;
   onOpen: () => void;
   canManage: boolean;
-  onAssign: (assignedTo: string | null) => void;
+  members: ReturnType<typeof useTaskTeamMembers>;
+  onManagePeople: () => void;
 }) {
   const column = columns.find((candidate) => candidate.id === task.column_status);
 
@@ -308,32 +321,18 @@ function TaskListRow({
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-        {canManage ? (
-          <label
-            className="relative z-10"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <span className="sr-only">Assign {task.title} to</span>
-            <select
-              value={task.assigned_to ?? ""}
-              onChange={(event) =>
-                onAssign(event.target.value || null)
-              }
-              className="rounded-full border border-[#DED0E7] bg-white px-3 py-2 text-[11px] font-semibold text-[#695677] outline-none focus:border-[#7D4698] focus:ring-2 focus:ring-[#EEE3FA]"
-            >
-              <option value="">Unassigned</option>
-              {PROJECT_ASSIGNEES.map((assignee) => (
-                <option key={assignee} value={assignee}>
-                  {assignee}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <span className="text-[11px] font-medium text-[#8B7895]">
-            {task.assigned_to}
-          </span>
-        )}
+        <span
+          className="relative z-10"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <TaskPeopleButton
+            taskTitle={task.title}
+            assigneeUsernames={task.assignee_usernames}
+            members={members}
+            disabled={!canManage}
+            onClick={onManagePeople}
+          />
+        </span>
         <span
           className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={{ backgroundColor: column?.tint, color: column?.text }}
@@ -1448,10 +1447,16 @@ function WebsiteDevelopmentDashboard() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [teamProfile, setTeamProfile] = useState<{
+    username: string;
     name: string;
     accessLevel: TeamAccessLevel;
   } | null>(null);
   const [isTeamProfileReady, setIsTeamProfileReady] = useState(false);
+  const [taskToAssign, setTaskToAssign] = useState<WebsiteTask | null>(null);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [isSavingAssignees, setIsSavingAssignees] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const teamMembers = useTaskTeamMembers();
 
   const currentClientId = clientIds[selectedClient];
   const canManage = teamProfile?.accessLevel === "owner";
@@ -1483,7 +1488,11 @@ function WebsiteDevelopmentDashboard() {
       const profile = readTeamSessionProfile();
       setTeamProfile(
         profile
-          ? { name: profile.name, accessLevel: profile.accessLevel }
+          ? {
+              username: profile.username,
+              name: profile.name,
+              accessLevel: profile.accessLevel,
+            }
           : null,
       );
       setIsTeamProfileReady(true);
@@ -1537,12 +1546,12 @@ function WebsiteDevelopmentDashboard() {
       let query = supabase
         .from("website_tasks")
         .select(
-          "id, client_id, title, description, column_status, priority, live_url, assigned_to, created_at",
+          "id, client_id, title, description, column_status, priority, live_url, assigned_to, assignee_usernames, created_at",
         )
         .eq("client_id", currentClientId)
         .order("created_at", { ascending: true });
       if (activeProfile.accessLevel === "staff") {
-        query = query.eq("assigned_to", activeProfile.name);
+        query = query.contains("assignee_usernames", [activeProfile.username]);
       }
       const { data, error } = await query;
 
@@ -1558,6 +1567,10 @@ function WebsiteDevelopmentDashboard() {
         ...task,
         description: task.description ?? "",
         live_url: task.live_url ?? null,
+        assignee_usernames: normalizeAssigneeUsernames(
+          task.assignee_usernames,
+          task.assigned_to,
+        ),
         column_status: isColumnStatus(task.column_status)
           ? task.column_status
           : "needs_content",
@@ -1641,9 +1654,14 @@ function WebsiteDevelopmentDashboard() {
         column_status: columnStatus,
         priority: values.priority,
         assigned_to: values.assignedTo,
+        assignee_usernames: values.assignedTo
+          ? [teamUsernameForName(values.assignedTo)].filter(
+              (username): username is string => Boolean(username),
+            )
+          : [],
       })
       .select(
-        "id, client_id, title, description, column_status, priority, live_url, assigned_to, created_at",
+        "id, client_id, title, description, column_status, priority, live_url, assigned_to, assignee_usernames, created_at",
       )
       .single();
 
@@ -1719,26 +1737,62 @@ function WebsiteDevelopmentDashboard() {
     setErrorMessage(null);
   }
 
-  async function assignTask(taskId: string, assignedTo: string | null) {
+  function openPeoplePicker(task: WebsiteTask) {
     if (!canManage) return;
-    const previous = tasks.find((task) => task.id === taskId)?.assigned_to ?? null;
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === taskId ? { ...task, assigned_to: assignedTo } : task,
-      ),
+    setTaskToAssign(task);
+    setSelectedAssignees(task.assignee_usernames);
+    setAssignmentError(null);
+  }
+
+  function closePeoplePicker() {
+    if (isSavingAssignees) return;
+    setTaskToAssign(null);
+    setSelectedAssignees([]);
+    setAssignmentError(null);
+  }
+
+  function toggleAssignee(username: string) {
+    setSelectedAssignees((current) =>
+      current.includes(username)
+        ? current.filter((candidate) => candidate !== username)
+        : [...current, username],
     );
+    setAssignmentError(null);
+  }
+
+  async function saveAssignees() {
+    if (!canManage || !taskToAssign || isSavingAssignees) return;
+    const taskId = taskToAssign.id;
+    const assignedTo = teamNameForUsername(selectedAssignees[0]);
+
+    setIsSavingAssignees(true);
+    setAssignmentError(null);
     const { error } = await supabase
       .from("website_tasks")
-      .update({ assigned_to: assignedTo })
+      .update({
+        assignee_usernames: selectedAssignees,
+        assigned_to: assignedTo,
+      })
       .eq("id", taskId);
+    setIsSavingAssignees(false);
+
     if (error) {
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === taskId ? { ...task, assigned_to: previous } : task,
-        ),
-      );
-      setErrorMessage(`Could not reassign the task: ${error.message}`);
+      setAssignmentError(`Could not save people: ${error.message}`);
+      return;
     }
+
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              assignee_usernames: selectedAssignees,
+              assigned_to: assignedTo,
+            }
+          : task,
+      ),
+    );
+    closePeoplePicker();
   }
 
   return (
@@ -1903,9 +1957,8 @@ function WebsiteDevelopmentDashboard() {
                   task={task}
                   onOpen={() => setSelectedTaskId(task.id)}
                   canManage={canManage}
-                  onAssign={(assignedTo) =>
-                    void assignTask(task.id, assignedTo)
-                  }
+                  members={teamMembers}
+                  onManagePeople={() => openPeoplePicker(task)}
                 />
               ))
             ) : (
@@ -1961,6 +2014,18 @@ function WebsiteDevelopmentDashboard() {
           actorName={teamProfile?.name ?? "Team member"}
         />
       )}
+
+      <TaskPeopleModal
+        open={Boolean(taskToAssign)}
+        taskTitle={taskToAssign?.title ?? ""}
+        members={teamMembers}
+        selectedUsernames={selectedAssignees}
+        isSaving={isSavingAssignees}
+        error={assignmentError}
+        onToggle={toggleAssignee}
+        onClose={closePeoplePicker}
+        onSave={() => void saveAssignees()}
+      />
     </div>
   );
 }

@@ -18,17 +18,61 @@ alter table public.website_tasks
 alter table public.tasks
   add column if not exists assigned_to text;
 
+alter table public.website_tasks
+  add column if not exists assignee_usernames text[]
+    not null default '{}'::text[];
+
+alter table public.tasks
+  add column if not exists assignee_usernames text[]
+    not null default '{}'::text[];
+
 -- Preserve the existing Emilia calendar assignment when migrating old rows.
 update public.tasks
 set assigned_to = assignee
 where assigned_to is null
   and assignee in ('Arion', 'Sure', 'Emilia');
 
+update public.website_tasks
+set assignee_usernames = array[
+  case lower(btrim(assigned_to))
+    when 'karen' then 'Understory_Karen'
+    when 'adrian' then 'Understory_Adrian'
+    when 'arion' then 'Understory_Arion'
+    when 'sure' then 'Understory_Sure'
+    when 'emilia' then 'Understory_Emilia'
+  end
+]
+where cardinality(assignee_usernames) = 0
+  and lower(btrim(assigned_to)) in (
+    'karen', 'adrian', 'arion', 'sure', 'emilia'
+  );
+
+update public.tasks
+set assignee_usernames = array[
+  case lower(btrim(assigned_to))
+    when 'karen' then 'Understory_Karen'
+    when 'adrian' then 'Understory_Adrian'
+    when 'arion' then 'Understory_Arion'
+    when 'sure' then 'Understory_Sure'
+    when 'emilia' then 'Understory_Emilia'
+  end
+]
+where cardinality(assignee_usernames) = 0
+  and lower(btrim(assigned_to)) in (
+    'karen', 'adrian', 'arion', 'sure', 'emilia'
+  );
+
 create index if not exists website_tasks_client_assigned_to_idx
   on public.website_tasks (client_id, assigned_to);
 
 create index if not exists tasks_client_assigned_to_idx
   on public.tasks (client_id, assigned_to);
+
+create index if not exists website_tasks_assignee_usernames_idx
+  on public.website_tasks using gin (assignee_usernames);
+
+create index if not exists tasks_assignee_usernames_idx
+  on public.tasks using gin (assignee_usernames);
 
 create table if not exists public.team_payroll (
   id uuid primary key default gen_random_uuid(),

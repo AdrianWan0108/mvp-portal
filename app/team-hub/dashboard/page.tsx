@@ -276,7 +276,7 @@ function LoadingRows({ count = 3 }: { count?: number }) {
 }
 
 export default function TeamHubDashboardPage() {
-  const { name, title, accessLevel, isReady } = useTeamIdentity();
+  const { username, name, title, accessLevel, isReady } = useTeamIdentity();
   const [assignedTasks, setAssignedTasks] = useState<AssignedTask[]>([]);
   const [activities, setActivities] = useState<ActivityRow[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -289,9 +289,10 @@ export default function TeamHubDashboardPage() {
   const isOwner = accessLevel === "owner";
 
   useEffect(() => {
-    if (!isReady || !name || !accessLevel) return;
+    if (!isReady || !username || !name || !accessLevel) return;
 
     let isActive = true;
+    const activeUsername = username;
     const activeName = name;
 
     async function loadDashboard() {
@@ -316,12 +317,12 @@ export default function TeamHubDashboardPage() {
           .select(
             "id, client_id, title, column_status, assigned_to, created_at",
           )
-          .eq("assigned_to", activeName)
+          .contains("assignee_usernames", [activeUsername])
           .order("created_at", { ascending: false }),
         supabase
           .from("tasks")
           .select("id, client_id, title, status, assigned_to, created_at")
-          .eq("assigned_to", activeName)
+          .contains("assignee_usernames", [activeUsername])
           .order("created_at", { ascending: false }),
         supabase
           .from("team_activity_log")
@@ -586,7 +587,7 @@ export default function TeamHubDashboardPage() {
     return () => {
       isActive = false;
     };
-  }, [accessLevel, isOwner, isReady, name]);
+  }, [accessLevel, isOwner, isReady, name, username]);
 
   useEffect(() => {
     if (!isDecisionModalOpen) return;

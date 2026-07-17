@@ -1,9 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ClientSelect } from "@/app/_components/ClientSelect";
-import { useTeamIdentity } from "@/app/team-hub/_components/TeamIdentity";
+import {
+  TEAM_IDENTITIES,
+  useTeamIdentity,
+} from "@/app/team-hub/_components/TeamIdentity";
 import {
   DIVISIONS,
   DIVISION_DESCRIPTIONS,
@@ -44,7 +48,14 @@ type DivisionTask = {
   filming_card_data: unknown;
   research_entries: unknown;
   figjam_embed_url: string | null;
+  assignee_usernames: string[];
   created_at: string;
+};
+
+type TeamMember = {
+  team_username: string;
+  full_name: string;
+  avatar_url: string | null;
 };
 
 type TemplateOption = {
@@ -162,6 +173,42 @@ function ClientMark({ client }: { client: WorkspaceClientSlug }) {
   );
 }
 
+function MemberAvatar({
+  member,
+  size = "small",
+}: {
+  member: TeamMember;
+  size?: "small" | "large";
+}) {
+  const sizeClass = size === "large" ? "size-10" : "size-7";
+  const textClass = size === "large" ? "text-sm" : "text-[10px]";
+
+  return member.avatar_url ? (
+    <Image
+      src={member.avatar_url}
+      alt=""
+      width={size === "large" ? 40 : 28}
+      height={size === "large" ? 40 : 28}
+      className={`${sizeClass} shrink-0 rounded-full object-cover`}
+    />
+  ) : (
+    <span
+      aria-hidden="true"
+      className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-full bg-[var(--primary)] font-bold text-[var(--primary-foreground)] ${textClass}`}
+    >
+      {member.full_name.trim().charAt(0).toUpperCase() || "?"}
+    </span>
+  );
+}
+
+const fallbackTeamMembers: TeamMember[] = Object.values(TEAM_IDENTITIES).map(
+  (member) => ({
+    team_username: member.username,
+    full_name: member.name,
+    avatar_url: null,
+  }),
+);
+
 export default function TeamHubProjectsPage() {
   const { accessLevel, isReady: isIdentityReady } = useTeamIdentity();
   const isOwner = isIdentityReady && accessLevel === "owner";
@@ -169,6 +216,9 @@ export default function TeamHubProjectsPage() {
   const { client, isReady: isClientReady, setClient } = useProjectTheme();
   const [clientId, setClientId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<DivisionTask[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(
+    fallbackTeamMembers,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isChoosingTemplate, setIsChoosingTemplate] = useState(false);
@@ -183,11 +233,34 @@ export default function TeamHubProjectsPage() {
     null,
   );
   const [isDeleting, setIsDeleting] = useState(false);
+  const [taskToAssign, setTaskToAssign] = useState<DivisionTask | null>(null);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [isSavingAssignees, setIsSavingAssignees] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
 
   const clientOptions = WORKSPACE_CLIENT_SLUGS.map((slug) => ({
     value: slug,
     label: WORKSPACE_CLIENTS[slug].name,
   }));
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadTeamMembers() {
+      const { data, error: directoryError } = await supabase
+        .from("team_profile_directory")
+        .select("team_username, full_name, avatar_url")
+        .order("full_name", { ascending: true });
+
+      if (!isActive || directoryError || !data?.length) return;
+      setTeamMembers(data as TeamMember[]);
+    }
+
+    void loadTeamMembers();
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isClientReady) return;
@@ -220,7 +293,7 @@ export default function TeamHubProjectsPage() {
       const { data, error: taskError } = await supabase
         .from("division_tasks")
         .select(
-          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, created_at",
+          "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, created_at",
         )
         .eq("client_id", clientRecord.id)
         .eq("division", division)
@@ -286,7 +359,7 @@ export default function TeamHubProjectsPage() {
         research_entries: [],
       })
       .select(
-        "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, created_at",
+        "id, client_id, division, title, description, status, template_type, content_brief_data, filming_card_data, research_entries, figjam_embed_url, assignee_usernames, created_at",
       )
       .single();
     setIsSaving(false);
@@ -322,6 +395,56 @@ export default function TeamHubProjectsPage() {
       current.filter((task) => task.id !== taskToDelete.id),
     );
     setTaskToDelete(null);
+  }
+
+  function openPeoplePicker(task: DivisionTask) {
+    setTaskToAssign(task);
+    setSelectedAssignees(task.assignee_usernames ?? []);
+    setAssignmentError(null);
+  }
+
+  function closePeoplePicker() {
+    if (isSavingAssignees) return;
+    setTaskToAssign(null);
+    setSelectedAssignees([]);
+    setAssignmentError(null);
+  }
+
+  function toggleAssignee(username: string) {
+    setSelectedAssignees((current) =>
+      current.includes(username)
+        ? current.filter((candidate) => candidate !== username)
+        : [...current, username],
+    );
+    setAssignmentError(null);
+  }
+
+  async function saveAssignees() {
+    if (!taskToAssign || isSavingAssignees) return;
+
+    setIsSavingAssignees(true);
+    setAssignmentError(null);
+    const { error: updateError } = await supabase
+      .from("division_tasks")
+      .update({ assignee_usernames: selectedAssignees })
+      .eq("id", taskToAssign.id);
+    setIsSavingAssignees(false);
+
+    if (updateError) {
+      setAssignmentError(
+        `Could not save people on this task: ${updateError.message}`,
+      );
+      return;
+    }
+
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskToAssign.id
+          ? { ...task, assignee_usernames: selectedAssignees }
+          : task,
+      ),
+    );
+    closePeoplePicker();
   }
 
   return (
@@ -446,6 +569,13 @@ export default function TeamHubProjectsPage() {
                 );
                 const href =
                   specializedHref ?? `/team-hub/projects/${task.id}`;
+                const assignedMembers = (task.assignee_usernames ?? [])
+                  .map((username) =>
+                    teamMembers.find(
+                      (member) => member.team_username === username,
+                    ),
+                  )
+                  .filter((member): member is TeamMember => Boolean(member));
 
                 return (
                   <article
@@ -484,17 +614,57 @@ export default function TeamHubProjectsPage() {
                           : "Open task details"}
                       </p>
                     </Link>
-                    {isOwner && (
-                      <div className="border-t border-[var(--border)] px-5 py-3">
+                    <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3">
+                      <button
+                        type="button"
+                        onClick={() => openPeoplePicker(task)}
+                        className="inline-flex min-w-0 items-center gap-2 rounded-full text-xs font-semibold text-[var(--foreground)] transition hover:text-[var(--primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+                        aria-label={`${
+                          assignedMembers.length ? "Edit people on" : "Assign people to"
+                        } ${task.title}`}
+                      >
+                        {assignedMembers.length ? (
+                          <span
+                            className="flex -space-x-2"
+                            aria-label={assignedMembers
+                              .map((member) => member.full_name)
+                              .join(", ")}
+                          >
+                            {assignedMembers.slice(0, 3).map((member) => (
+                              <span
+                                key={member.team_username}
+                                className="rounded-full border-2 border-[var(--card)]"
+                              >
+                                <MemberAvatar member={member} />
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span
+                            aria-hidden="true"
+                            className="flex size-7 items-center justify-center rounded-full border border-dashed border-[var(--border)] bg-[var(--muted)] text-sm text-[var(--primary)]"
+                          >
+                            +
+                          </span>
+                        )}
+                        <span className="truncate">
+                          {assignedMembers.length
+                            ? `${assignedMembers.length} ${
+                                assignedMembers.length === 1 ? "person" : "people"
+                              }`
+                            : "Assign people"}
+                        </span>
+                      </button>
+                      {isOwner && (
                         <button
                           type="button"
                           onClick={() => setTaskToDelete(task)}
-                          className="text-xs font-semibold text-[#9A4040] underline decoration-transparent underline-offset-4 transition hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9A4040]"
+                          className="shrink-0 text-xs font-semibold text-[#9A4040] underline decoration-transparent underline-offset-4 transition hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9A4040]"
                         >
                           Delete task
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </article>
                 );
               })}
@@ -602,6 +772,64 @@ export default function TeamHubProjectsPage() {
               </select>
             </label>
           )}
+        </div>
+      </TeamModal>
+
+      <TeamModal
+        open={Boolean(taskToAssign)}
+        title="Assign or tag people"
+        description={
+          taskToAssign
+            ? `Choose everyone who should be tagged on “${taskToAssign.title}”.`
+            : undefined
+        }
+        submitLabel="Save people"
+        isSaving={isSavingAssignees}
+        themed
+        onClose={closePeoplePicker}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveAssignees();
+        }}
+      >
+        <div className="grid gap-3">
+          {assignmentError && (
+            <p
+              role="alert"
+              className="rounded-xl border border-[#E4B9B9] bg-[#FFF0F0] px-4 py-3 text-sm text-[#8B3E3E]"
+            >
+              {assignmentError}
+            </p>
+          )}
+          {teamMembers.map((member) => {
+            const isSelected = selectedAssignees.includes(
+              member.team_username,
+            );
+            return (
+              <label
+                key={member.team_username}
+                className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition ${
+                  isSelected
+                    ? "border-[var(--primary)] bg-[var(--muted)]"
+                    : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]"
+                }`}
+              >
+                <MemberAvatar member={member} size="large" />
+                <span className="min-w-0 flex-1 text-sm font-semibold text-[var(--foreground)]">
+                  {member.full_name}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleAssignee(member.team_username)}
+                  className="size-4 accent-[var(--primary)]"
+                />
+              </label>
+            );
+          })}
+          <p className="text-xs leading-5 text-[var(--muted-foreground)]">
+            Leave everyone unchecked to keep this task unassigned.
+          </p>
         </div>
       </TeamModal>
 

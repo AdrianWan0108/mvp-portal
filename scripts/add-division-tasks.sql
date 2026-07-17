@@ -25,6 +25,7 @@ create table if not exists public.division_tasks (
   filming_card_data jsonb,
   research_entries jsonb not null default '[]'::jsonb,
   figjam_embed_url text,
+  assignee_usernames text[] not null default '{}'::text[],
   created_at timestamptz default now()
 );
 
@@ -36,6 +37,9 @@ alter table public.division_tasks
   add column if not exists filming_card_data jsonb;
 alter table public.division_tasks
   add column if not exists research_entries jsonb;
+alter table public.division_tasks
+  add column if not exists assignee_usernames text[]
+    not null default '{}'::text[];
 
 update public.division_tasks
 set research_entries = '[]'::jsonb
@@ -423,6 +427,9 @@ create policy "Allow all division task access"
 
 create index if not exists division_tasks_client_division_created_at_idx
   on public.division_tasks (client_id, division, created_at desc);
+
+create index if not exists division_tasks_assignee_usernames_idx
+  on public.division_tasks using gin (assignee_usernames);
 
 create index if not exists tasks_division_task_created_at_idx
   on public.tasks (division_task_id, created_at);
