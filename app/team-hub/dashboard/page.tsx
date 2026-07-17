@@ -17,13 +17,23 @@ type ClientRow = {
 
 type AssignedTask = {
   id: string;
-  source: "website" | "social";
+  source: "project" | "website" | "social";
   title: string;
   clientName: string;
   clientSlug: string;
   status: string;
   href: string;
   createdAt: string;
+};
+
+type DivisionTaskRow = {
+  id: string;
+  client_id: string;
+  division: string;
+  title: string;
+  status: string;
+  template_type: string;
+  created_at: string;
 };
 
 type ActivityRow = {
@@ -141,6 +151,16 @@ function taskHref(source: AssignedTask["source"], clientSlug: string) {
   return source === "website"
     ? `/team/website?client=${clientSlug}`
     : `/team/${clientSlug}/social-media/august-content-calendar`;
+}
+
+function divisionTaskHref(task: DivisionTaskRow, clientSlug: string) {
+  if (task.template_type === "content_calendar") {
+    return `/team-hub/projects/${encodeURIComponent(task.id)}/calendar?calendar=${encodeURIComponent(task.id)}`;
+  }
+  if (task.division === "website" && isWorkspaceClientSlug(clientSlug)) {
+    return `/team-hub/projects/website?client=${clientSlug}`;
+  }
+  return `/team-hub/projects/${encodeURIComponent(task.id)}`;
 }
 
 function isToday(value: string) {
@@ -301,7 +321,7 @@ export default function TeamHubDashboardPage() {
 
       const [
         clientsResult,
-        websiteAssignedResult,
+        projectAssignedResult,
         socialAssignedResult,
         activityResult,
         meetingsResult,
@@ -313,9 +333,9 @@ export default function TeamHubDashboardPage() {
       ] = await Promise.all([
         supabase.from("clients").select("id, name, slug"),
         supabase
-          .from("website_tasks")
+          .from("division_tasks")
           .select(
-            "id, client_id, title, column_status, assigned_to, created_at",
+            "id, client_id, division, title, status, template_type, created_at",
           )
           .contains("assignee_usernames", [activeUsername])
           .order("created_at", { ascending: false }),
@@ -391,21 +411,21 @@ export default function TeamHubDashboardPage() {
           slug: "",
         };
 
-      const websiteAssigned = (websiteAssignedResult.data ??
-        []) as WebsiteTaskRow[];
+      const projectAssigned = (projectAssignedResult.data ??
+        []) as DivisionTaskRow[];
       const socialAssigned = (socialAssignedResult.data ??
         []) as SocialTaskRow[];
       const nextAssignedTasks: AssignedTask[] = [
-        ...websiteAssigned.map((task) => {
+        ...projectAssigned.map((task) => {
           const client = clientDetails(task.client_id);
           return {
-            id: `website-${task.id}`,
-            source: "website" as const,
+            id: `project-${task.id}`,
+            source: "project" as const,
             title: task.title,
             clientName: client.name,
             clientSlug: client.slug,
-            status: task.column_status,
-            href: taskHref("website", client.slug),
+            status: task.status,
+            href: divisionTaskHref(task, client.slug),
             createdAt: task.created_at,
           };
         }),
@@ -560,7 +580,7 @@ export default function TeamHubDashboardPage() {
 
       const warnings = [
         clientsResult.error && "client names",
-        websiteAssignedResult.error && "website assignments",
+        projectAssignedResult.error && "project assignments",
         socialAssignedResult.error && "social-media assignments",
         activityResult.error && "project updates",
         meetingsResult.error && "upcoming meetings",
@@ -661,7 +681,7 @@ export default function TeamHubDashboardPage() {
             <OwnerSummaryCard
               value={isLoading ? "—" : assignedTasks.length}
               label="Tasks assigned to you"
-              detail="Your active website and social tasks"
+              detail="Your active project and social tasks"
               href="#assigned-tasks"
             />
             <OwnerSummaryCard
@@ -696,7 +716,11 @@ export default function TeamHubDashboardPage() {
                     className="group flex items-center gap-3 rounded-2xl border border-[#E5DBEA] bg-[#FFFDF8] px-4 py-3.5 transition hover:border-[#BFA9CC] hover:bg-[#FAF5FC] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
                   >
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EEE3FA] text-sm font-semibold text-[#7D4698]">
-                      {task.source === "website" ? "W" : "S"}
+                      {task.source === "project"
+                        ? "P"
+                        : task.source === "website"
+                          ? "W"
+                          : "S"}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-[#341F60]">

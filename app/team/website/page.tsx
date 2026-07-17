@@ -329,6 +329,7 @@ function TaskListRow({
             taskTitle={task.title}
             assigneeUsernames={task.assignee_usernames}
             members={members}
+            mode="watching"
             disabled={!canManage}
             onClick={onManagePeople}
           />
@@ -477,14 +478,14 @@ function AddTaskModal({
 
           <label className="block">
             <span className="text-xs font-semibold text-[#695677]">
-              Assign to
+              Initial watcher
             </span>
             <select
               value={assignedTo}
               onChange={(event) => setAssignedTo(event.target.value)}
               className="mt-2 w-full rounded-xl border border-[#DED0E7] bg-[#FFFCF7] px-3.5 py-3 text-sm text-[#341F60] outline-none transition focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
             >
-              <option value="">Unassigned</option>
+              <option value="">No watcher</option>
               {PROJECT_ASSIGNEES.map((assignee) => (
                 <option key={assignee} value={assignee}>
                   {assignee}
@@ -1447,7 +1448,6 @@ function WebsiteDevelopmentDashboard() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [teamProfile, setTeamProfile] = useState<{
-    username: string;
     name: string;
     accessLevel: TeamAccessLevel;
   } | null>(null);
@@ -1489,7 +1489,6 @@ function WebsiteDevelopmentDashboard() {
       setTeamProfile(
         profile
           ? {
-              username: profile.username,
               name: profile.name,
               accessLevel: profile.accessLevel,
             }
@@ -1539,20 +1538,15 @@ function WebsiteDevelopmentDashboard() {
     }
 
     let isActive = true;
-    const activeProfile = teamProfile;
-
     async function loadTasks() {
       setIsLoadingTasks(true);
-      let query = supabase
+      const query = supabase
         .from("website_tasks")
         .select(
           "id, client_id, title, description, column_status, priority, live_url, assigned_to, assignee_usernames, created_at",
         )
         .eq("client_id", currentClientId)
         .order("created_at", { ascending: true });
-      if (activeProfile.accessLevel === "staff") {
-        query = query.contains("assignee_usernames", [activeProfile.username]);
-      }
       const { data, error } = await query;
 
       if (!isActive) return;
@@ -1777,7 +1771,7 @@ function WebsiteDevelopmentDashboard() {
     setIsSavingAssignees(false);
 
     if (error) {
-      setAssignmentError(`Could not save people: ${error.message}`);
+      setAssignmentError(`Could not save watchers: ${error.message}`);
       return;
     }
 
@@ -2020,6 +2014,7 @@ function WebsiteDevelopmentDashboard() {
         taskTitle={taskToAssign?.title ?? ""}
         members={teamMembers}
         selectedUsernames={selectedAssignees}
+        mode="watching"
         isSaving={isSavingAssignees}
         error={assignmentError}
         onToggle={toggleAssignee}
