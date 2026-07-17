@@ -21,7 +21,8 @@ type NavIcon =
   | "clients"
   | "payroll"
   | "documents"
-  | "resources";
+  | "resources"
+  | "profile";
 
 const navigation: Array<{
   label: string;
@@ -33,6 +34,11 @@ const navigation: Array<{
     label: "Dashboard",
     href: "/team-hub/dashboard",
     icon: "dashboard",
+  },
+  {
+    label: "Profile",
+    href: "/team-hub/profile",
+    icon: "profile",
   },
   {
     label: "Management",
@@ -117,6 +123,12 @@ function TeamIcon({
       <>
         <path d="M6 3h9l3 3v15H6Z" />
         <path d="M15 3v4h4M9 12h6M9 16h6" />
+      </>
+    ),
+    profile: (
+      <>
+        <circle cx="12" cy="8" r="3.2" />
+        <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
       </>
     ),
     menu: <path d="M4 7h16M4 12h16M4 17h16" />,
