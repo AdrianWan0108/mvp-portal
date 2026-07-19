@@ -58,7 +58,9 @@ const EMPTY_FIELDS: ClientProfileFields = {
   notes: "",
 };
 
-type ClientProfileRow = ClientProfileFields & {
+type ClientProfileRow = {
+  [Key in keyof ClientProfileFields]: string | null;
+} & {
   id: string;
   client_id: string;
   updated_by: string | null;
@@ -436,7 +438,13 @@ export default function TeamHubClientInfoDetailPage() {
   }, [loadPhotos]);
 
   function startEditing() {
-    setDraft(profile ? { ...EMPTY_FIELDS, ...profile } : EMPTY_FIELDS);
+    const next = { ...EMPTY_FIELDS };
+    (Object.keys(EMPTY_FIELDS) as Array<keyof ClientProfileFields>).forEach(
+      (key) => {
+        next[key] = profile?.[key] ?? "";
+      },
+    );
+    setDraft(next);
     setSaveError(null);
     setIsEditing(true);
   }
