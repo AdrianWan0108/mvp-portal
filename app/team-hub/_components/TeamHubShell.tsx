@@ -17,6 +17,7 @@ import { TEAM_LOGIN_PATH } from "@/lib/team-auth";
 type NavIcon =
   | "dashboard"
   | "management"
+  | "sales"
   | "projects"
   | "clients"
   | "payroll"
@@ -44,6 +45,12 @@ const navigation: Array<{
     label: "Management",
     href: "/team-hub/management",
     icon: "management",
+    ownerOnly: true,
+  },
+  {
+    label: "Sales",
+    href: "/team-hub/sales",
+    icon: "sales",
     ownerOnly: true,
   },
   {
@@ -93,6 +100,12 @@ function TeamIcon({
       <>
         <circle cx="12" cy="8" r="3" />
         <path d="M5 21v-2a7 7 0 0 1 14 0v2M18 5l1-1M6 5 5 4" />
+      </>
+    ),
+    sales: (
+      <>
+        <path d="M3 3h7.5L21 13.5a2 2 0 0 1 0 2.83l-4.67 4.67a2 2 0 0 1-2.83 0L3 10.5V3Z" />
+        <circle cx="8" cy="8" r="1.6" />
       </>
     ),
     projects: (
