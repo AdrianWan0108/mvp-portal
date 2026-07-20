@@ -26,7 +26,6 @@ import {
   useTaskTeamMembers,
   type TaskTeamMember,
 } from "@/app/team-hub/projects/_components/TaskPeoplePicker";
-import { TaskItemsEditor } from "@/app/team-hub/projects/_components/TaskItemsEditor";
 import {
   WORKSPACE_CLIENTS,
   isWorkspaceClientSlug,
@@ -1165,7 +1164,11 @@ function AugustContentCalendarContent() {
   const postRailRef = useRef<HTMLDivElement>(null);
 
   const selectedPost = posts.find((post) => post.id === selectedPostId);
-  const canManage = teamProfile?.accessLevel === "owner";
+  // Any signed-in team member can add/edit/delete posts and manage
+  // assignees here — only the "see every assignment" scope below stays
+  // owner-only, since staff still only load posts assigned to them.
+  const canManage = Boolean(teamProfile);
+  const seesAllAssignments = teamProfile?.accessLevel === "owner";
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1672,7 +1675,7 @@ function AugustContentCalendarContent() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4">
           <UnderstoryBrand />
           <p className="text-right text-[11px] leading-5 text-[#8B7895]">
-            {canManage ? (
+            {seesAllAssignments ? (
               "Owner view · All assignments"
             ) : (
               <>
@@ -1816,8 +1819,6 @@ function AugustContentCalendarContent() {
             </div>
           )}
         </section>
-
-        {calendarTaskId && <TaskItemsEditor taskId={calendarTaskId} />}
 
         <footer className="mt-10 flex flex-col gap-1 border-t border-[#E0D4E8] py-6 text-xs text-[#8B7895] sm:flex-row sm:justify-between">
           <p>{clientLabel} · Internal content workspace</p>

@@ -1,3 +1,4 @@
+import { AssistantBubble } from "./_components/AssistantBubble";
 import { ProjectThemeProvider } from "./_components/ProjectThemeProvider";
 
 export default function ProjectsLayout({
@@ -5,5 +6,10 @@ export default function ProjectsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <ProjectThemeProvider>{children}</ProjectThemeProvider>;
+  return (
+    <ProjectThemeProvider>
+      {children}
+      <AssistantBubble />
+    </ProjectThemeProvider>
+  );
 }

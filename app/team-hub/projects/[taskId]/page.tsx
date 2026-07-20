@@ -291,7 +291,9 @@ export default function DivisionTaskDetailPage() {
           />
         )}
 
-        <TaskItemsEditor taskId={task.id} />
+        {task.division !== "social-media" && (
+          <TaskItemsEditor taskId={task.id} />
+        )}
 
         {supportsFigJam && (
           <FigJamTaskBoard

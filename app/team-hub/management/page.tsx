@@ -1,8 +1,11 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { TEAM_IDENTITIES } from "@/lib/team-auth";
 import { useTeamIdentity } from "../_components/TeamIdentity";
 
 type SlackSyncResult = {
@@ -12,6 +15,24 @@ type SlackSyncResult = {
   error?: string;
 };
 
+type UsageSummary = {
+  monthlySpend: number;
+  monthlyBudget: number;
+  byUser: Array<{ teamUsername: string; cost: number; messages: number }>;
+  byAgent: Array<{ agent: string; cost: number; messages: number }>;
+};
+
+const profileByUsername = Object.fromEntries(
+  Object.values(TEAM_IDENTITIES).map((profile) => [profile.username, profile]),
+);
+
+function formatUsd(amount: number) {
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
+
 export default function TeamHubManagementPage() {
   const router = useRouter();
   const { accessLevel, isReady } = useTeamIdentity();
@@ -20,12 +41,30 @@ export default function TeamHubManagementPage() {
     tone: "error" | "success";
     text: string;
   } | null>(null);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isReady && accessLevel && accessLevel !== "owner") {
       router.replace("/team-hub/dashboard");
     }
   }, [accessLevel, isReady, router]);
+
+  const loadUsage = useCallback(async () => {
+    if (!isReady || accessLevel !== "owner") return;
+    const response = await fetch("/api/team-hub/assistant?usageSummary=1");
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setUsageError(body.error ?? "Could not load assistant usage.");
+      return;
+    }
+    setUsage(body as UsageSummary);
+    setUsageError(null);
+  }, [accessLevel, isReady]);
+
+  useEffect(() => {
+    void loadUsage();
+  }, [loadUsage]);
 
   if (!isReady || accessLevel !== "owner") {
     return (
@@ -163,6 +202,125 @@ export default function TeamHubManagementPage() {
               </p>
             )}
           </article>
+        </section>
+
+        <section className="mt-8 rounded-[24px] border border-[#D7CBE0] bg-white p-6 shadow-[0_8px_28px_rgba(40,21,79,0.055)]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7D4698]">
+            Owner access
+          </p>
+          <h2 className="mt-2 text-lg font-semibold text-[#341F60]">
+            Claude assistant usage
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-[#75647F]">
+            Spend across the whole team this month, from the assistant
+            bubble on the Projects tab.
+          </p>
+
+          {usageError && (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-[#E4B9B9] bg-[#FFF0F0] px-4 py-3 text-sm text-[#8B3E3E]"
+            >
+              {usageError}
+            </p>
+          )}
+
+          {usage && (
+            <div className="mt-5">
+              <div className="flex items-baseline justify-between">
+                <p className="text-2xl font-semibold text-[#341F60]">
+                  {formatUsd(usage.monthlySpend)}
+                  <span className="ml-1.5 text-sm font-normal text-[#8B7895]">
+                    of {formatUsd(usage.monthlyBudget)}
+                  </span>
+                </p>
+                <p className="text-xs text-[#8B7895]">
+                  {Math.min(
+                    100,
+                    Math.round(
+                      (usage.monthlySpend / usage.monthlyBudget) * 100,
+                    ),
+                  )}
+                  % used
+                </p>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#EEE3FA]">
+                <div
+                  className={`h-full rounded-full ${
+                    usage.monthlySpend >= usage.monthlyBudget
+                      ? "bg-[#C4574A]"
+                      : "bg-[#7D4698]"
+                  }`}
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (usage.monthlySpend / usage.monthlyBudget) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+
+              <div className="mt-6 grid gap-6 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8B7895]">
+                    By team member
+                  </p>
+                  {usage.byUser.length ? (
+                    <ul className="mt-2 space-y-2">
+                      {usage.byUser
+                        .sort((a, b) => b.cost - a.cost)
+                        .map((row) => (
+                          <li
+                            key={row.teamUsername}
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span className="text-[#341F60]">
+                              {profileByUsername[row.teamUsername]?.name ??
+                                row.teamUsername}
+                            </span>
+                            <span className="text-[#75647F]">
+                              {formatUsd(row.cost)} · {row.messages} message
+                              {row.messages === 1 ? "" : "s"}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-[#8B7895]">
+                      No usage yet this month.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8B7895]">
+                    By agent
+                  </p>
+                  {usage.byAgent.length ? (
+                    <ul className="mt-2 space-y-2">
+                      {usage.byAgent.map((row) => (
+                        <li
+                          key={row.agent}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="capitalize text-[#341F60]">
+                            {row.agent}
+                          </span>
+                          <span className="text-[#75647F]">
+                            {formatUsd(row.cost)} · {row.messages} message
+                            {row.messages === 1 ? "" : "s"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-[#8B7895]">
+                      No usage yet this month.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </main>
