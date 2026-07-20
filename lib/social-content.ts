@@ -79,6 +79,7 @@ export const PROJECT_ASSIGNEES = [
   "Arion",
   "Sure",
   "Emilia",
+  "Xiyangcen",
 ] as const;
 
 export function isSocialPostFormat(

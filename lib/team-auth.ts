@@ -4,7 +4,8 @@ export type TeamIdentity =
   | "adrian"
   | "arion"
   | "sure"
-  | "emilia";
+  | "emilia"
+  | "xiyangcen";
 
 export const TEAM_SESSION_COOKIE = "team_session";
 export const TEAM_LOGIN_PATH = "/team-hub/login";
@@ -54,6 +55,13 @@ export const TEAM_IDENTITIES: Record<
     title: "Graphic Designer",
     accessLevel: "staff",
     initials: "E",
+  },
+  xiyangcen: {
+    username: "Understory_Xiyangcen",
+    name: "Xiyangcen",
+    title: "Graphic Designer",
+    accessLevel: "staff",
+    initials: "X",
   },
 };
 
