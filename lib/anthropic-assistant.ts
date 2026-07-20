@@ -1,5 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  DIVISION_LABELS,
+  DIVISION_TASK_STATUS_DETAILS,
+  isDivision,
+  isDivisionTaskStatus,
+  normalizeContentBriefData,
+} from "@/lib/division-tasks";
 
 export type AssistantAgent = "content" | "research";
 
@@ -14,16 +21,21 @@ export const PRICING = { input: 1, output: 5 }; // USD per million tokens
 export const MONTHLY_BUDGET_USD = 20;
 export const MAX_REPLY_TOKENS = 1024;
 export const MAX_HISTORY_MESSAGES = 20;
+export const MAX_PROJECT_TASKS = 30;
 
 export const AGENT_SYSTEM_PROMPTS: Record<AssistantAgent, string> = {
   content:
     "You are a marketing copywriter for Understory, a small marketing agency, helping write content for its clients. " +
     "Write in the client's brand voice when one is given below. Produce tight, ready-to-use output — social captions, " +
-    "ad copy, brief drafts — not lengthy explanations. Ask a clarifying question only if the request is genuinely ambiguous.",
+    "ad copy, brief drafts — not lengthy explanations. Ask a clarifying question only if the request is genuinely ambiguous. " +
+    "If a client's current projects/tasks list is given below, treat it as accurate and up to date — use it directly to " +
+    "answer status questions instead of saying you lack access.",
   research:
     "You are a research assistant for Understory, a small marketing agency. Synthesize what you're told about a client " +
     "below plus your own general knowledge into clear, actionable findings for the team. You do not have live internet " +
-    "access — say so plainly if asked for something time-sensitive you can't know, rather than guessing.",
+    "access — say so plainly if asked for something time-sensitive you can't know, rather than guessing. " +
+    "If a client's current projects/tasks list is given below, treat it as accurate and up to date — use it directly to " +
+    "answer status questions instead of saying you lack access.",
 };
 
 type ClientProfileDigest = {
@@ -51,6 +63,36 @@ export function buildClientContext(profile: ClientProfileDigest): string {
     lines.push(`Marketing channels in use: ${profile.marketing_channels}`);
   }
   return lines.join("\n");
+}
+
+type ProjectTaskDigest = {
+  division: string;
+  title: string;
+  status: string;
+  template_type: string;
+  content_brief_data: unknown;
+};
+
+export function buildProjectContext(tasks: ProjectTaskDigest[]): string {
+  if (!tasks.length) return "";
+
+  const lines = tasks.map((task) => {
+    const divisionLabel = isDivision(task.division)
+      ? DIVISION_LABELS[task.division]
+      : task.division;
+    const statusLabel = isDivisionTaskStatus(task.status)
+      ? DIVISION_TASK_STATUS_DETAILS[task.status].label
+      : task.status;
+    const dueDate =
+      task.template_type === "content_brief"
+        ? normalizeContentBriefData(task.content_brief_data).due_date
+        : "";
+    return `- [${divisionLabel}] ${task.title} — ${statusLabel}${
+      dueDate ? ` (due ${dueDate})` : ""
+    }`;
+  });
+
+  return `Current projects/tasks for this client:\n${lines.join("\n")}`;
 }
 
 export function estimateCostUsd(inputTokens: number, outputTokens: number) {

@@ -10,10 +10,12 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   AGENT_SYSTEM_PROMPTS,
   MAX_HISTORY_MESSAGES,
+  MAX_PROJECT_TASKS,
   MAX_REPLY_TOKENS,
   MODEL_ID,
   MONTHLY_BUDGET_USD,
   buildClientContext,
+  buildProjectContext,
   estimateCostUsd,
   getAnthropicClient,
   getMonthlySpend,
@@ -293,6 +295,12 @@ export async function POST(request: NextRequest) {
       )
       .eq("client_id", effectiveClientId)
       .maybeSingle();
+    const { data: taskRows } = await admin
+      .from("division_tasks")
+      .select("division, title, status, template_type, content_brief_data")
+      .eq("client_id", effectiveClientId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_PROJECT_TASKS);
 
     if (clientRow) {
       systemPrompt += `\n\n${buildClientContext({
@@ -305,6 +313,8 @@ export async function POST(request: NextRequest) {
         marketing_channels: profileRow?.marketing_channels ?? null,
       })}`;
     }
+    const projectContext = buildProjectContext(taskRows ?? []);
+    if (projectContext) systemPrompt += `\n\n${projectContext}`;
   }
 
   let reply: string;
