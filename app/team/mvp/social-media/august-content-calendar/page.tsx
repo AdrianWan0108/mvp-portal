@@ -536,7 +536,7 @@ function ReferenceCell({
   }, [reference.platform]);
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-xl border border-[#E3D8EA] bg-white">
+    <div className="group relative aspect-[3/4] overflow-hidden rounded-xl border border-[#E3D8EA] bg-white">
       {reference.platform === "pinterest" ? (
         <a data-pin-do="embedPin" data-pin-width="small" href={reference.url}>
           {reference.url}
@@ -856,7 +856,7 @@ function SlidePreview({
             </div>
           )}
           {slide.references.length > 0 ? (
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-2 gap-2">
               {slide.references.map((reference) => (
                 <ReferenceCell
                   key={reference.id}
