@@ -49,6 +49,9 @@ import {
 } from "@/lib/social-content";
 import { UnderstoryBrand } from "../../../_components/UnderstoryBrand";
 
+const SLIDE_IMAGE_BUCKET = "client-assets";
+const MAX_SLIDE_IMAGE_BYTES = 20 * 1024 * 1024;
+
 type PostStatus =
   | "not_started"
   | "for_review"
@@ -230,22 +233,11 @@ const slidePalettes = [
   ["#49306C", "#E7DAF2"],
 ] as const;
 
-const fallbackImages = [
-  "https://placehold.co/400x500/EEE3FA/341F60?text=Rebrand%0Areference",
-  "https://placehold.co/400x500/F2E8FA/341F60?text=Myth-busting%0Areference",
-  "https://placehold.co/400x500/E7D7F2/341F60?text=Polestar%0Areference",
-  "https://placehold.co/400x500/F4EAFB/341F60?text=Founder+story%0Areference",
-] as const;
-
-function getPostPlaceholderImage(post: Post) {
-  return fallbackImages[(post.id - 1) % fallbackImages.length];
-}
-
 function getCardCoverImage(post: Post) {
-  const slideOneLink = post.slides.find(
-    (slide) => slide.slideNumber === 1,
-  )?.imageUrl;
-  return getImagePreviewUrl(slideOneLink);
+  const coverLink = [...post.slides].sort(
+    (first, second) => first.slideNumber - second.slideNumber,
+  )[0]?.imageUrl;
+  return getImagePreviewUrl(coverLink);
 }
 
 function extractGoogleDriveFileId(value: string) {
@@ -274,6 +266,31 @@ function getImagePreviewUrl(rawUrl: string | null | undefined) {
     : rawUrl;
 }
 
+function sanitizeUploadFileName(fileName: string) {
+  const sanitized = fileName
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return sanitized || "slide-image";
+}
+
+function getSlideImageStoragePath(fileUrl: string | null | undefined) {
+  if (!fileUrl) return null;
+
+  try {
+    const url = new URL(fileUrl);
+    const marker = `/storage/v1/object/public/${SLIDE_IMAGE_BUCKET}/`;
+    const markerIndex = url.pathname.indexOf(marker);
+
+    if (markerIndex === -1) return null;
+    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
+
 function Icon({
   name,
   className = "size-5",
@@ -285,7 +302,8 @@ function Icon({
     | "warning"
     | "instagram"
     | "check"
-    | "link";
+    | "link"
+    | "upload";
   className?: string;
 }) {
   const paths = {
@@ -310,6 +328,12 @@ function Icon({
       <>
         <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
         <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1" />
+      </>
+    ),
+    upload: (
+      <>
+        <path d="M12 16V4M7 9l5-5 5 5" />
+        <path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" />
       </>
     ),
   };
@@ -347,8 +371,8 @@ function PreviewImage({
       <div className="absolute inset-0 flex items-center justify-center bg-[#F0E8F6] px-6 text-center text-xs leading-5 text-[#695677]">
         <div className="max-w-[260px]">
           <Icon name="warning" className="mx-auto mb-2 size-5 text-[#A57731]" />
-          Image couldn&apos;t load — make sure the Google Drive file is shared as
-          &apos;Anyone with the link can view&apos;.
+          Image couldn&apos;t load — check that the link is public or upload the
+          image directly.
         </div>
       </div>
     );
@@ -364,7 +388,7 @@ function PreviewImage({
   );
 }
 
-function DriveLinkInput({
+function SlideImageInput({
   value,
   label,
   onSave,
@@ -391,7 +415,7 @@ function DriveLinkInput({
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <form onSubmit={submitLink} className="flex items-center gap-2">
         <label className="min-w-0 flex-1">
           <span className="sr-only">{label}</span>
@@ -407,7 +431,7 @@ function DriveLinkInput({
                 setDraft(event.target.value);
                 setValidationError(null);
               }}
-              placeholder="Paste Google Drive link"
+              placeholder="Paste Google Drive image link"
               className="h-9 w-full rounded-full border border-[#DED0E7] bg-white pl-8 pr-3 text-[11px] text-[#4F3D69] outline-none transition placeholder:text-[#A18DAA] focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
             />
           </span>
@@ -429,6 +453,67 @@ function DriveLinkInput({
           </button>
         )}
       </form>
+      {validationError && (
+        <p className="mt-1.5 text-[10px] text-[#9A5E42]">{validationError}</p>
+      )}
+    </div>
+  );
+}
+
+function SlideImageUploadButton({
+  onUpload,
+}: {
+  onUpload: (file: File) => Promise<string | null>;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  async function uploadImage(file: File | undefined) {
+    if (!file || isUploading) return;
+    if (!file.type.startsWith("image/")) {
+      setValidationError("Choose an image file to upload.");
+      return;
+    }
+    if (file.size > MAX_SLIDE_IMAGE_BYTES) {
+      setValidationError("Choose an image smaller than 20 MB.");
+      return;
+    }
+
+    setIsUploading(true);
+    setValidationError(null);
+    try {
+      const uploadError = await onUpload(file);
+      setValidationError(uploadError);
+    } catch {
+      setValidationError("The image could not be uploaded. Please try again.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(event) => void uploadImage(event.target.files?.[0])}
+        />
+        <button
+          type="button"
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#CDB9D8] bg-[#F8F3FB] px-3 py-2 text-[11px] font-semibold text-[#5F4D70] transition hover:border-[#B99CC8] hover:bg-[#EEE3FA] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7D4698]"
+        >
+          <Icon name="upload" className="size-3.5" />
+          {isUploading ? "Uploading…" : "Upload image"}
+        </button>
+        <span className="text-[10px] text-[#A18DAA]">Images · max 20 MB</span>
+      </div>
       {validationError && (
         <p className="mt-1.5 text-[10px] text-[#9A5E42]">{validationError}</p>
       )}
@@ -495,7 +580,7 @@ function ReferenceInput({ onAdd }: { onAdd: (url: string) => void }) {
                 setDraft(event.target.value);
                 setValidationError(null);
               }}
-              placeholder="Paste Pinterest or Instagram link"
+              placeholder="Paste Figma, Pinterest, or Instagram link"
               className="h-9 w-full rounded-full border border-[#DED0E7] bg-white pl-8 pr-3 text-[11px] text-[#4F3D69] outline-none transition placeholder:text-[#A18DAA] focus:border-[#7D4698] focus:ring-2 focus:ring-[#7D4698]/20"
             />
           </span>
@@ -524,6 +609,16 @@ function ReferenceCell({
   canManage: boolean;
   onDelete: () => void;
 }) {
+  const uploadedImagePath = getSlideImageStoragePath(reference.url);
+  const isFigmaReference = (() => {
+    try {
+      const hostname = new URL(reference.url).hostname.toLowerCase();
+      return hostname === "figma.com" || hostname.endsWith(".figma.com");
+    } catch {
+      return false;
+    }
+  })();
+
   useEffect(() => {
     if (reference.platform !== "pinterest") return;
     let cancelled = false;
@@ -537,7 +632,24 @@ function ReferenceCell({
 
   return (
     <div className="group relative aspect-[3/4] overflow-hidden rounded-xl border border-[#E3D8EA] bg-white">
-      {reference.platform === "pinterest" ? (
+      {uploadedImagePath ? (
+        <a
+          href={reference.url}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open uploaded reference image"
+          className="block h-full w-full"
+        >
+          <PreviewImage
+            src={reference.url}
+            alt="Uploaded visual reference"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <span className="absolute bottom-2 right-2 rounded-full bg-[#7D4698]/90 px-2 py-1 text-[9px] font-semibold text-white backdrop-blur-sm">
+            Image
+          </span>
+        </a>
+      ) : reference.platform === "pinterest" ? (
         <a data-pin-do="embedPin" data-pin-width="small" href={reference.url}>
           {reference.url}
         </a>
@@ -553,7 +665,11 @@ function ReferenceCell({
             className="size-4"
           />
           <span className="text-[9px] font-semibold uppercase tracking-[0.06em]">
-            {reference.platform === "instagram" ? "Instagram" : "Reference"}
+            {reference.platform === "instagram"
+              ? "Instagram"
+              : isFigmaReference
+                ? "Figma"
+                : "Reference"}
           </span>
         </a>
       )}
@@ -723,26 +839,46 @@ function PostCard({
 function SlidePreview({
   post,
   slide,
+  slideIndex,
+  totalSlides,
   previewUrl,
   clientLabel,
   clientInitial,
   onImageSave,
+  onReferenceImageUpload,
   onClearImage,
   onEdit,
   onAddReference,
   onDeleteReference,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragging,
+  isDragTarget,
+  isReordering,
   canManage,
 }: {
   post: Post;
   slide: Slide;
+  slideIndex: number;
+  totalSlides: number;
   previewUrl?: string;
   clientLabel: string;
   clientInitial: string;
   onImageSave: (link: string) => void;
+  onReferenceImageUpload: (file: File) => Promise<string | null>;
   onClearImage: () => void;
   onEdit: () => void;
   onAddReference: (url: string) => void;
   onDeleteReference: (referenceId: string) => void;
+  onDragStart: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragOver: (event: React.DragEvent<HTMLElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+  isDragTarget: boolean;
+  isReordering: boolean;
   canManage: boolean;
 }) {
   const [primary, secondary] = slidePalettes[(post.id - 1) % slidePalettes.length];
@@ -750,7 +886,15 @@ function SlidePreview({
   const previewImageUrl = getImagePreviewUrl(previewUrl);
 
   return (
-    <article className="w-[84vw] max-w-[390px] shrink-0 snap-center sm:w-[390px]">
+    <article
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`w-[84vw] max-w-[390px] shrink-0 snap-center rounded-[24px] transition sm:w-[390px] ${
+        isDragTarget
+          ? "ring-2 ring-[#7D4698] ring-offset-4 ring-offset-[#FFF9EF]"
+          : ""
+      } ${isDragging ? "opacity-45" : ""}`}
+    >
       <div
         className="relative aspect-[4/5] overflow-hidden rounded-[22px] shadow-[0_18px_45px_rgba(52,31,96,0.16)]"
         style={{ backgroundColor: primary }}
@@ -758,72 +902,105 @@ function SlidePreview({
         {previewImageUrl ? (
           <PreviewImage
             src={previewImageUrl}
-            alt={`Design for slide ${slide.slideNumber} of ${post.title}`}
+            alt={`Design for slide ${slideIndex + 1} of ${post.title}`}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <>
             <div
-              className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-luminosity"
-              style={{ backgroundImage: `url(${getPostPlaceholderImage(post)})` }}
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `linear-gradient(145deg, ${secondary} 0%, #FFF9EF 55%, ${primary} 160%)`,
+              }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/5 to-black/35" />
             <div
-              className="absolute -right-[14%] -top-[6%] size-[48%] rounded-full opacity-50 blur-sm"
+              className="absolute -right-[14%] -top-[6%] size-[48%] rounded-full opacity-20 blur-sm"
               style={{ backgroundColor: secondary }}
             />
-            <div className="absolute left-6 top-6 flex items-center gap-2 text-white/75">
-              <span className="flex size-7 items-center justify-center rounded-full border border-white/40 text-[8px] font-semibold tracking-[0.12em]">
+            <div className="absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/60 bg-white/75 px-2.5 py-1.5 text-[#4F3D69] backdrop-blur-sm">
+              <span className="flex size-5 items-center justify-center rounded-full border border-[#CDB9D8] text-[7px] font-semibold tracking-[0.12em]">
                 {clientInitial}
               </span>
-              <span className="text-[9px] font-semibold uppercase tracking-[0.2em]">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.16em]">
                 {clientLabel}
               </span>
             </div>
-            <div className="absolute inset-x-0 bottom-[11%] px-7 sm:px-8">
-              <div className="space-y-3">
+            <div className="absolute inset-0 flex items-center justify-center px-7 py-16">
+              <div className="max-h-[60%] max-w-[88%] space-y-1.5 overflow-y-auto break-words rounded-2xl border border-white/60 bg-white/80 px-4 py-3 text-center shadow-[0_8px_24px_rgba(52,31,96,0.12)] backdrop-blur-sm">
                 {textParts.map((part, index) => (
                   <p
                     key={`${slide.slideNumber}-${index}`}
                     className={
                       index === 0
-                        ? "text-[clamp(1.35rem,5vw,2rem)] font-semibold leading-[1.08] tracking-[-0.035em] text-white"
-                        : "max-w-[95%] text-sm font-medium leading-5 text-white/90 sm:text-[15px] sm:leading-6"
+                        ? "text-xs font-semibold leading-5 text-[#4F3D69]"
+                        : "text-[11px] font-medium leading-4 text-[#75647F]"
                     }
                   >
-                    {part}
+                    {part || "Pending on-screen text"}
                   </p>
                 ))}
               </div>
             </div>
           </>
         )}
-        <span className="absolute bottom-5 right-6 text-[10px] font-medium text-white/60">
-          {slide.slideNumber} / {post.slides.length}
+        <span className="absolute right-5 top-5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#4F3D69] backdrop-blur-sm">
+          {slideIndex === 0 ? "Cover" : `Slide ${slideIndex + 1}`}
+        </span>
+        <span
+          className={`absolute bottom-5 right-6 text-[10px] font-medium ${
+            previewImageUrl ? "text-white/60" : "text-[#75647F]"
+          }`}
+        >
+          {slideIndex + 1} / {totalSlides}
         </span>
       </div>
 
       <div className="mt-5 rounded-[20px] border border-[#E3D8EA] bg-white p-5">
         {canManage && (
-        <div className="mb-4 flex items-start gap-2 border-b border-[#EEE6F4] pb-4">
-          <div className="min-w-0 flex-1">
-            <DriveLinkInput
-              key={previewUrl || "empty"}
-              value={previewUrl}
-              label={`image for slide ${slide.slideNumber}`}
-              onSave={onImageSave}
-              onClear={onClearImage}
-            />
+          <div className="mb-4 flex items-start gap-2 border-b border-[#EEE6F4] pb-4">
+            <div className="min-w-0 flex-1">
+              <SlideImageInput
+                key={previewUrl || "empty"}
+                value={previewUrl}
+                label={`image for slide ${slideIndex + 1}`}
+                onSave={onImageSave}
+                onClear={onClearImage}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="h-9 shrink-0 rounded-full border border-[#DED0E7] bg-white px-3.5 text-[11px] font-semibold text-[#5F4D70] transition hover:border-[#C7B3D2] hover:bg-[#F5EEFA]"
+            >
+              Edit
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="h-9 shrink-0 rounded-full border border-[#DED0E7] bg-white px-3.5 text-[11px] font-semibold text-[#5F4D70] transition hover:border-[#C7B3D2] hover:bg-[#F5EEFA]"
-          >
-            Edit
-          </button>
-        </div>
         )}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E8DDED] bg-[#FAF7FC] px-3 py-2.5">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7D4698]">
+              {slideIndex === 0 ? "Cover slide" : `Slide ${slideIndex + 1}`}
+            </p>
+            <p className="mt-0.5 text-[10px] text-[#8B7895]">
+              {slideIndex === 0 ? "Shown first in this post" : `${slideIndex + 1} of ${totalSlides}`}
+            </p>
+          </div>
+          {canManage && totalSlides > 1 && (
+            <button
+              type="button"
+              draggable={!isReordering}
+              disabled={isReordering}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              className="inline-flex h-8 cursor-grab items-center gap-2 rounded-full border border-[#D9CBE1] bg-white px-3 text-[10px] font-semibold text-[#5F4D70] transition hover:border-[#B99CC8] hover:bg-[#EEE3FA] active:cursor-grabbing disabled:cursor-wait disabled:opacity-45"
+            >
+              <span aria-hidden="true" className="text-sm leading-none tracking-[-0.12em]">
+                ⋮⋮
+              </span>
+              {isReordering ? "Saving order…" : "Drag to reorder"}
+            </button>
+          )}
+        </div>
         {slide.warningFlag && (
           <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#E4C586] bg-[#FFF7E5] px-3 py-2.5 text-xs font-medium leading-5 text-[#805A22]">
             <Icon name="warning" className="mt-0.5 size-4 shrink-0" />
@@ -851,8 +1028,14 @@ function SlidePreview({
             References
           </p>
           {canManage && (
-            <div className="mt-2">
+            <div className="mt-2 space-y-2">
               <ReferenceInput onAdd={onAddReference} />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#A18DAA]">
+                  Or
+                </span>
+                <SlideImageUploadButton onUpload={onReferenceImageUpload} />
+              </div>
             </div>
           )}
           {slide.references.length > 0 ? (
@@ -880,34 +1063,43 @@ function SlidePreview({
 function PostDetail({
   post,
   status,
-  slideImageLinks,
   clientLabel,
   clientInitial,
   onSlideImageSave,
+  onReferenceImageUpload,
   onClearSlideImage,
   onAddSlide,
   onEditSlide,
   onAddReference,
   onDeleteReference,
+  onReorderSlides,
+  isReorderingSlides,
   onClose,
   canManage,
 }: {
   post: Post;
   status: PostStatus;
-  slideImageLinks: Record<string, string>;
   clientLabel: string;
   clientInitial: string;
   onSlideImageSave: (slideNumber: number, link: string) => void;
+  onReferenceImageUpload: (
+    slideId: string,
+    file: File,
+  ) => Promise<string | null>;
   onClearSlideImage: (slideNumber: number) => void;
   onAddSlide: () => void;
   onEditSlide: (slide: Slide) => void;
   onAddReference: (slideId: string, url: string) => void;
   onDeleteReference: (slideId: string, referenceId: string) => void;
+  onReorderSlides: (orderedSlideIds: string[]) => void;
+  isReorderingSlides: boolean;
   onClose: () => void;
   canManage: boolean;
 }) {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [draggedSlideId, setDraggedSlideId] = useState<string | null>(null);
+  const [dragTargetSlideId, setDragTargetSlideId] = useState<string | null>(null);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -948,6 +1140,26 @@ function PostDetail({
       }
     });
     setActiveSlide(closestIndex);
+  }
+
+  function dropSlide(targetSlideId: string) {
+    if (!draggedSlideId || draggedSlideId === targetSlideId) {
+      setDraggedSlideId(null);
+      setDragTargetSlideId(null);
+      return;
+    }
+
+    const orderedSlideIds = post.slides.map((slide) => slide.id);
+    const draggedIndex = orderedSlideIds.indexOf(draggedSlideId);
+    const targetIndex = orderedSlideIds.indexOf(targetSlideId);
+    if (draggedIndex < 0 || targetIndex < 0) return;
+
+    orderedSlideIds.splice(draggedIndex, 1);
+    orderedSlideIds.splice(targetIndex, 0, draggedSlideId);
+    onReorderSlides(orderedSlideIds);
+    setActiveSlide(targetIndex);
+    setDraggedSlideId(null);
+    setDragTargetSlideId(null);
   }
 
   return (
@@ -1055,18 +1267,21 @@ function PostDetail({
                   onScroll={updateActiveSlide}
                   className="-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pb-7 pt-2 [scrollbar-width:none] sm:-mx-8 sm:gap-6 sm:px-8 [&::-webkit-scrollbar]:hidden"
                 >
-                  {post.slides.map((slide) => (
+                  {post.slides.map((slide, slideIndex) => (
                     <SlidePreview
                       key={slide.id}
                       post={post}
                       slide={slide}
-                      previewUrl={
-                        slideImageLinks[`${post.id}-${slide.slideNumber}`]
-                      }
+                      slideIndex={slideIndex}
+                      totalSlides={post.slides.length}
+                      previewUrl={slide.imageUrl}
                       clientLabel={clientLabel}
                       clientInitial={clientInitial}
                       onImageSave={(link) =>
                         onSlideImageSave(slide.slideNumber, link)
+                      }
+                      onReferenceImageUpload={(file) =>
+                        onReferenceImageUpload(slide.id, file)
                       }
                       onClearImage={() => onClearSlideImage(slide.slideNumber)}
                       onEdit={() => onEditSlide(slide)}
@@ -1074,6 +1289,31 @@ function PostDetail({
                       onDeleteReference={(referenceId) =>
                         onDeleteReference(slide.id, referenceId)
                       }
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", slide.id);
+                        setDraggedSlideId(slide.id);
+                      }}
+                      onDragOver={(event) => {
+                        if (!draggedSlideId || isReorderingSlides) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setDragTargetSlideId(slide.id);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        dropSlide(slide.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedSlideId(null);
+                        setDragTargetSlideId(null);
+                      }}
+                      isDragging={draggedSlideId === slide.id}
+                      isDragTarget={
+                        dragTargetSlideId === slide.id &&
+                        draggedSlideId !== slide.id
+                      }
+                      isReordering={isReorderingSlides}
                       canManage={canManage}
                     />
                   ))}
@@ -1500,7 +1740,7 @@ function AugustContentCalendarContent() {
   const [deleteSlideId, setDeleteSlideId] = useState<string | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [statuses, setStatuses] = useState<Record<number, PostStatus>>({});
-  const [slideImageLinks, setSlideImageLinks] = useState<Record<string, string>>({});
+  const [isReorderingSlides, setIsReorderingSlides] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
@@ -1715,18 +1955,6 @@ function AugustContentCalendarContent() {
           loadedPosts.map((post) => [post.id, post.status]),
         ),
       );
-      setSlideImageLinks(
-        Object.fromEntries(
-          loadedPosts.flatMap((post) =>
-            post.slides
-              .filter((slide) => Boolean(slide.imageUrl))
-              .map((slide) => [
-                `${post.id}-${slide.slideNumber}`,
-                slide.imageUrl as string,
-              ]),
-          ),
-        ),
-      );
       setErrorMessage(null);
       setIsLoading(false);
     }
@@ -1817,12 +2045,12 @@ function AugustContentCalendarContent() {
     slideNumber: number,
     rawLink: string,
   ) {
-    if (!canManage) return;
+    if (!canManage) return false;
     const post = posts.find((candidate) => candidate.id === postId);
     const slide = post?.slides.find(
       (candidate) => candidate.slideNumber === slideNumber,
     );
-    if (!post || !slide) return;
+    if (!post || !slide) return false;
 
     const { error } = await supabase
       .from("task_slides")
@@ -1830,11 +2058,9 @@ function AugustContentCalendarContent() {
       .eq("id", slide.id);
     if (error) {
       setErrorMessage(`Could not save the slide image link: ${error.message}`);
-      return;
+      return false;
     }
 
-    const key = `${postId}-${slideNumber}`;
-    setSlideImageLinks((current) => ({ ...current, [key]: rawLink }));
     setPosts((current) =>
       current.map((candidate) =>
         candidate.id === postId
@@ -1850,6 +2076,136 @@ function AugustContentCalendarContent() {
       ),
     );
     setErrorMessage(null);
+    return true;
+  }
+
+  async function uploadReferenceImage(
+    postId: number,
+    slideId: string,
+    file: File,
+  ): Promise<string | null> {
+    if (!canManage || !clientId) return "The project is not ready for uploads.";
+    const post = posts.find((candidate) => candidate.id === postId);
+    const slide = post?.slides.find((candidate) => candidate.id === slideId);
+    if (!post || !slide) return "This slide could not be found.";
+
+    const storagePath = `${clientId}/social-references/${slide.id}/${crypto.randomUUID()}-${sanitizeUploadFileName(file.name)}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(SLIDE_IMAGE_BUCKET)
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      const message = `Could not upload the image: ${uploadError.message}`;
+      setErrorMessage(message);
+      return message;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(SLIDE_IMAGE_BUCKET).getPublicUrl(storagePath);
+    const didSave = await addReference(postId, slide.id, publicUrl);
+
+    if (!didSave) {
+      await supabase.storage.from(SLIDE_IMAGE_BUCKET).remove([storagePath]);
+      return "The image uploaded, but it could not be added as a reference.";
+    }
+
+    return null;
+  }
+
+  async function reorderSlides(postId: number, orderedSlideIds: string[]) {
+    if (!canManage || isReorderingSlides) return;
+    const post = posts.find((candidate) => candidate.id === postId);
+    if (!post || orderedSlideIds.length !== post.slides.length) return;
+
+    const slidesById = new Map(post.slides.map((slide) => [slide.id, slide]));
+    if (orderedSlideIds.some((slideId) => !slidesById.has(slideId))) return;
+
+    const originalSlides = [...post.slides].sort(
+      (first, second) => first.slideNumber - second.slideNumber,
+    );
+    const maxSlideNumber = Math.max(
+      ...originalSlides.map((slide) => slide.slideNumber),
+    );
+
+    async function writeSlideNumbers(
+      assignments: Array<{ id: string; slideNumber: number }>,
+    ) {
+      for (const assignment of assignments) {
+        const { error } = await supabase
+          .from("task_slides")
+          .update({ slide_number: assignment.slideNumber })
+          .eq("id", assignment.id);
+        if (error) return error;
+      }
+      return null;
+    }
+
+    async function restoreOriginalOrder() {
+      const recoveryBase = maxSlideNumber + 3000;
+      await writeSlideNumbers(
+        originalSlides.map((slide, index) => ({
+          id: slide.id,
+          slideNumber: recoveryBase + index,
+        })),
+      );
+      await writeSlideNumbers(
+        originalSlides.map((slide) => ({
+          id: slide.id,
+          slideNumber: slide.slideNumber,
+        })),
+      );
+    }
+
+    setIsReorderingSlides(true);
+    setErrorMessage(null);
+
+    const temporaryBase = maxSlideNumber + 1000;
+    const temporaryError = await writeSlideNumbers(
+      orderedSlideIds.map((slideId, index) => ({
+        id: slideId,
+        slideNumber: temporaryBase + index,
+      })),
+    );
+    if (temporaryError) {
+      await restoreOriginalOrder();
+      setErrorMessage(`Could not save the new slide order: ${temporaryError.message}`);
+      setIsReorderingSlides(false);
+      return;
+    }
+
+    const finalError = await writeSlideNumbers(
+      orderedSlideIds.map((slideId, index) => ({
+        id: slideId,
+        slideNumber: index + 1,
+      })),
+    );
+    if (finalError) {
+      await restoreOriginalOrder();
+      setErrorMessage(`Could not save the new slide order: ${finalError.message}`);
+      setIsReorderingSlides(false);
+      return;
+    }
+
+    setPosts((current) =>
+      current.map((candidate) =>
+        candidate.id === postId
+          ? {
+              ...candidate,
+              slides: orderedSlideIds.map((slideId, index) => ({
+                ...(slidesById.get(slideId) as Slide),
+                slideNumber: index + 1,
+              })),
+            }
+          : candidate,
+      ),
+    );
+    setIsReorderingSlides(false);
   }
 
   async function addSlide(postId: number) {
@@ -1975,7 +2331,7 @@ function AugustContentCalendarContent() {
   }
 
   async function addReference(postId: number, slideId: string, url: string) {
-    if (!canManage) return;
+    if (!canManage) return false;
     const platform = detectReferencePlatform(url);
     const { data, error } = await supabase
       .from("slide_references")
@@ -1991,7 +2347,7 @@ function AugustContentCalendarContent() {
       setErrorMessage(
         `Could not add the reference: ${error?.message ?? "No reference returned."}`,
       );
-      return;
+      return false;
     }
 
     const newReference: SlideReference = {
@@ -2014,6 +2370,7 @@ function AugustContentCalendarContent() {
       ),
     );
     setErrorMessage(null);
+    return true;
   }
 
   async function deleteReference(
@@ -2022,6 +2379,11 @@ function AugustContentCalendarContent() {
     referenceId: string,
   ) {
     if (!canManage) return;
+    const referenceUrl = posts
+      .find((candidate) => candidate.id === postId)
+      ?.slides.find((slide) => slide.id === slideId)
+      ?.references.find((reference) => reference.id === referenceId)?.url;
+    const uploadedImagePath = getSlideImageStoragePath(referenceUrl);
     const { error } = await supabase
       .from("slide_references")
       .delete()
@@ -2050,6 +2412,17 @@ function AugustContentCalendarContent() {
           : candidate,
       ),
     );
+    if (uploadedImagePath) {
+      const { error: removeError } = await supabase.storage
+        .from(SLIDE_IMAGE_BUCKET)
+        .remove([uploadedImagePath]);
+      if (removeError) {
+        setErrorMessage(
+          `The reference was removed, but its uploaded file could not be deleted: ${removeError.message}`,
+        );
+        return;
+      }
+    }
     setErrorMessage(null);
   }
 
@@ -2070,12 +2443,7 @@ function AugustContentCalendarContent() {
       return;
     }
 
-    const key = `${postId}-${slideNumber}`;
-    setSlideImageLinks((current) => {
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
+    const storagePath = getSlideImageStoragePath(slide.imageUrl);
     setPosts((current) =>
       current.map((candidate) =>
         candidate.id === postId
@@ -2090,6 +2458,17 @@ function AugustContentCalendarContent() {
           : candidate,
       ),
     );
+    if (storagePath) {
+      const { error: removeError } = await supabase.storage
+        .from(SLIDE_IMAGE_BUCKET)
+        .remove([storagePath]);
+      if (removeError) {
+        setErrorMessage(
+          `The slide was cleared, but the old upload could not be removed: ${removeError.message}`,
+        );
+        return;
+      }
+    }
     setErrorMessage(null);
   }
 
@@ -2406,11 +2785,13 @@ function AugustContentCalendarContent() {
           key={selectedPost.id}
           post={selectedPost}
           status={statuses[selectedPost.id]}
-          slideImageLinks={slideImageLinks}
           clientLabel={clientLabel}
           clientInitial={clientInitial}
           onSlideImageSave={(slideNumber, link) =>
             void saveSlideImageLink(selectedPost.id, slideNumber, link)
+          }
+          onReferenceImageUpload={(slideId, file) =>
+            uploadReferenceImage(selectedPost.id, slideId, file)
           }
           onClearSlideImage={(slideNumber) =>
             void clearSlideImage(selectedPost.id, slideNumber)
@@ -2425,6 +2806,10 @@ function AugustContentCalendarContent() {
           onDeleteReference={(slideId, referenceId) =>
             void deleteReference(selectedPost.id, slideId, referenceId)
           }
+          onReorderSlides={(orderedSlideIds) =>
+            void reorderSlides(selectedPost.id, orderedSlideIds)
+          }
+          isReorderingSlides={isReorderingSlides}
           onClose={() => setSelectedPostId(null)}
           canManage={canManage}
         />
