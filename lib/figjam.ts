@@ -12,7 +12,10 @@ function isFigmaUrl(url: URL) {
 
 function isFigJamBoardUrl(url: URL) {
   const [fileType, fileKey] = url.pathname.split("/").filter(Boolean);
-  return (fileType === "board" || fileType === "file") && Boolean(fileKey);
+  return (
+    (fileType === "board" || fileType === "file" || fileType === "design") &&
+    Boolean(fileKey)
+  );
 }
 
 function createLegacyEmbedUrl(boardUrl: URL) {

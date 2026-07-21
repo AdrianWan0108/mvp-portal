@@ -112,7 +112,7 @@ function FigJamPreview({
 
       <div className="relative h-[500px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_18px_45px_rgba(40,50,55,0.12)]">
         <iframe
-          title="FigJam board preview"
+          title="Board preview"
           src={figjamUrls.embedUrl}
           onLoad={() => setPreviewState("loaded")}
           onError={() => setPreviewState("failed")}
@@ -123,7 +123,7 @@ function FigJamPreview({
         />
         {previewState === "loading" && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--card)]/90 text-xs font-medium text-[var(--muted-foreground)]">
-            Loading FigJam board…
+            Loading board…
           </div>
         )}
       </div>
@@ -155,7 +155,7 @@ export function FigJamTaskBoard({
     if (isSaving) return;
     const figjamUrls = resolveFigJamUrls(input);
     if (!figjamUrls) {
-      setError("Paste a valid FigJam board or embed URL.");
+      setError("Paste a valid FigJam, Figma design, or embed URL.");
       return;
     }
 
@@ -168,7 +168,7 @@ export function FigJamTaskBoard({
     setIsSaving(false);
 
     if (updateError) {
-      setError(`Could not save the FigJam board: ${updateError.message}`);
+      setError(`Could not save the board: ${updateError.message}`);
       return;
     }
 
@@ -188,7 +188,7 @@ export function FigJamTaskBoard({
     setIsRemoving(false);
 
     if (updateError) {
-      setError(`Could not remove the FigJam board: ${updateError.message}`);
+      setError(`Could not remove the board: ${updateError.message}`);
       return;
     }
 
@@ -204,7 +204,7 @@ export function FigJamTaskBoard({
           Planning board
         </p>
         <h2 className="mt-2 text-xl font-semibold text-[var(--foreground)]">
-          FigJam board
+          FigJam / Figma board
         </h2>
       </div>
 
@@ -226,7 +226,7 @@ export function FigJamTaskBoard({
           className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4"
         >
           <label className="text-xs font-semibold text-[var(--foreground)]">
-            Paste FigJam board link
+            Paste a FigJam or Figma link
             <input
               autoFocus
               type="url"
@@ -235,13 +235,14 @@ export function FigJamTaskBoard({
                 setInput(event.target.value);
                 setError(null);
               }}
-              placeholder="https://www.figma.com/board/..."
+              placeholder="https://www.figma.com/board/... or /design/..."
               className={`mt-2 ${projectInputClass}`}
             />
           </label>
           <p className="mt-2 text-[11px] leading-5 text-[var(--muted-foreground)]">
-            Paste a board link or an existing Figma embed link. Make sure the
-            board is shared as “Anyone can view.”
+            Paste a FigJam board link, a Figma design file link, or an
+            existing Figma embed link. Make sure it&apos;s shared as “Anyone
+            can view.”
           </p>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             <TeamButton
@@ -287,7 +288,7 @@ export function FigJamTaskBoard({
             themed
             onClick={openEditor}
           >
-            + Add FigJam board
+            + Add board
           </TeamButton>
         </div>
       )}
