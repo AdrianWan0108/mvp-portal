@@ -7,6 +7,8 @@ export type SlackNotification =
       action: "approved" | "requested_changes";
       title: string;
       reviewerName: string;
+      comment?: string;
+      assigneeNames?: string[];
     }
   | {
       type: "task_review";

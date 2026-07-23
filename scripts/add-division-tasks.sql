@@ -228,6 +228,7 @@ alter table public.division_tasks
       'generic',
       'content_brief',
       'content_calendar',
+      'internal_approval',
       'analytics_results_hub',
       'website_dashboard'
     )

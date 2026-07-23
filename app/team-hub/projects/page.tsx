@@ -68,6 +68,13 @@ type TemplateOption = {
 
 const socialMediaTemplates: TemplateOption[] = [
   {
+    id: "internal_approval",
+    label: "Internal Approval",
+    description:
+      "Review submitted social posts, plan their publishing date and time, confirm the final caption, then send them to the client portal.",
+    defaultTitle: "Internal Approval",
+  },
+  {
     id: "content_brief",
     label: "Content brief",
     description:

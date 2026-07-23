@@ -2071,9 +2071,64 @@ function AugustContentCalendarContent() {
       ),
     );
 
+    let internalApprovalTaskId: string | null = null;
+    if (status === "for_review") {
+      const { data: approvalTask, error: approvalTaskError } = await supabase
+        .from("division_tasks")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("division", "social-media")
+        .eq("template_type", "internal_approval")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (approvalTaskError || !approvalTask) {
+        setStatuses((current) => ({
+          ...current,
+          [postId]: previousStatus,
+        }));
+        setPosts((current) =>
+          current.map((candidate) =>
+            candidate.id === postId
+              ? { ...candidate, status: previousStatus }
+              : candidate,
+          ),
+        );
+        setErrorMessage(
+          `Could not submit this post internally: ${
+            approvalTaskError?.message ??
+            "Create the Internal Approval task first."
+          }`,
+        );
+        return;
+      }
+      internalApprovalTaskId = approvalTask.id;
+    }
+
+    const reviewPayload =
+      status === "for_review"
+        ? {
+            status,
+            internal_approval_task_id: internalApprovalTaskId,
+            internal_review_submitted_at: new Date().toISOString(),
+            internal_approvals: {},
+            final_confirmed: false,
+            final_confirmed_by: null,
+            final_confirmed_at: null,
+            sent_to_client_at: null,
+            sent_to_client_by: null,
+            client_approvals: {},
+          }
+        : {
+            status,
+            internal_approval_task_id: null,
+            internal_review_submitted_at: null,
+          };
+
     const { error } = await supabase
       .from("tasks")
-      .update({ status })
+      .update(reviewPayload)
       .eq("id", post.databaseId);
 
     if (error) {

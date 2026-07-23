@@ -39,6 +39,7 @@ export const DIVISION_TASK_TEMPLATES = [
   "generic",
   "content_brief",
   "content_calendar",
+  "internal_approval",
   "analytics_results_hub",
   "website_dashboard",
 ] as const;
@@ -210,6 +211,14 @@ export function specializedDivisionHref(
     taskId
   ) {
     return `/team-hub/projects/${encodeURIComponent(taskId)}/calendar?calendar=${encodeURIComponent(taskId)}`;
+  }
+
+  if (
+    division === "social-media" &&
+    templateType === "internal_approval" &&
+    taskId
+  ) {
+    return `/team-hub/projects/${encodeURIComponent(taskId)}/internal-approval`;
   }
 
   if (division === "website") {

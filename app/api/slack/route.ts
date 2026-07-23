@@ -17,6 +17,8 @@ type ClientReviewNotification = {
   action: "approved" | "requested_changes";
   title: string;
   reviewerName: string;
+  comment?: string;
+  assigneeNames?: string[];
 };
 
 type TaskReviewNotification = {
@@ -98,6 +100,13 @@ function parseNotification(value: unknown): SlackNotification | null {
     const reviewerName = cleanText(payload.reviewerName, 80);
     const clientSlug = payload.clientSlug;
     const action = payload.action;
+    const comment = cleanText(payload.comment, 500) ?? undefined;
+    const assigneeNames = Array.isArray(payload.assigneeNames)
+      ? payload.assigneeNames
+          .map((name) => cleanText(name, 60))
+          .filter((name): name is string => Boolean(name))
+          .slice(0, 5)
+      : undefined;
 
     if (
       (clientSlug !== "mvp" && clientSlug !== "boardwalk") ||
@@ -109,7 +118,15 @@ function parseNotification(value: unknown): SlackNotification | null {
       return null;
     }
 
-    return { type: "client_review", clientSlug, action, title, reviewerName };
+    return {
+      type: "client_review",
+      clientSlug,
+      action,
+      title,
+      reviewerName,
+      comment,
+      assigneeNames,
+    };
   }
 
   if (payload.type === "task_review") {
@@ -179,6 +196,19 @@ export async function POST(request: NextRequest) {
         notification.clientSlug,
         `${clientName} ${action} '${notification.title}' — reviewer: ${notification.reviewerName}`,
       );
+
+      if (notification.action === "requested_changes") {
+        const assignedTo = notification.assigneeNames?.length
+          ? notification.assigneeNames.join(", ")
+          : "the social media team";
+        const commentSuffix = notification.comment
+          ? `: "${notification.comment}"`
+          : "";
+        await sendSlackMessage(
+          "admin",
+          `⚠️ ${clientName} requested changes on '${notification.title}' — assigned to ${assignedTo}${commentSuffix}`,
+        );
+      }
     } else if (notification.type === "task_review") {
       const teamProfile = teamProfileFromRequest(request);
       if (!teamProfile) {
